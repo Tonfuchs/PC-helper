@@ -126,8 +126,14 @@ public partial class App : Application
             foreach (var suspicion in result.Suspicions)
                 Log.Info($"Selbsttest:   Verdacht {suspicion.Percent:0} % - {suspicion.Title} ({suspicion.Rank})");
 
-            var path = Reporting.ReportBuilder.WriteHtml(result, incidents.LoadAll(10), new TelemetryLogger());
-            Log.Info("Selbsttest: Bericht geschrieben nach " + path);
+            var telemetry = new TelemetryLogger();
+            var incidentList = incidents.LoadAll(10);
+
+            var htmlPath = Reporting.ReportBuilder.WriteHtml(result, incidentList, telemetry);
+            Log.Info("Selbsttest: HTML-Bericht geschrieben nach " + htmlPath);
+
+            var pdfPath = Reporting.PdfReportBuilder.Write(result, incidentList, telemetry);
+            Log.Info("Selbsttest: PDF-Bericht geschrieben nach " + pdfPath);
         }
         catch (Exception ex)
         {

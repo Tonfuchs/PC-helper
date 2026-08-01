@@ -43,8 +43,30 @@ Windows, .NET 8, WPF. Quelloffen unter der MIT-Lizenz.
    Ein Klick auf **„Ja, Schwarzbild“** genügt – der Zeitpunkt ist damit belegt.
 5. **Immer nur eine Sache auf einmal ändern** und danach zwei bis drei Tage beobachten.
    Wer drei Dinge gleichzeitig ändert, weiß am Ende nicht, welche geholfen hat.
-6. Über **„Bericht speichern“** entsteht eine HTML-Datei mit allem Erhobenen – ideal, um sie
-   jemandem zu schicken oder in ein Forum zu stellen.
+6. **Bericht exportieren** – zwei Formate:
+   - **PDF** für Support-Anfragen und Garantiefälle. Öffnet überall, lässt sich an jedes Ticket
+     anhängen, kompakt aufgebaut (Zusammenfassung → Hardware → Neustart-Verlauf → Befunde).
+   - **HTML** zum Selberlesen im Browser – ausführlicher, mit allen Rohdaten zum Aufklappen.
+
+### Bluescreens: Stoppcodes im Klartext
+
+Findet die App Bluescreens, liest sie den **Stoppcode** aus Ereignis 1001 bzw. aus dem Feld
+`BugcheckCode` von Kernel-Power 41, übersetzt ihn (`0x0000001A → MEMORY_MANAGEMENT`) und leitet
+daraus die wahrscheinliche Ursache ab. Die Abstürze werden nach Stoppcode gruppiert – treten drei
+oder mehr *verschiedene* Codes auf, weist die App ausdrücklich darauf hin, dass wahllos wechselnde
+Stoppcodes für instabile Hardware sprechen und nicht für einen einzelnen defekten Treiber.
+
+Ebenso wird Ereignis 41 aufgeschlüsselt, statt nur gezählt:
+
+| Erkennung | Bedeutung |
+| --- | --- |
+| `BugcheckCode` ≠ 0 | Es ging ein Bluescreen voraus – kein eigenständiger Vorfall |
+| `PowerButtonTimestamp` ≠ 0 | Jemand hat den **Netzschalter gedrückt** – typisch nach einem Schwarzbild |
+| beides 0 | Der Rechner ist ohne Vorwarnung ausgegangen oder eingefroren |
+
+Diese Unterscheidung ist wichtig: Eine hohe Gesamtzahl an „unerwarteten Abschaltungen“ wirkt
+dramatisch, besteht aber oft überwiegend aus selbst ausgelösten Neustarts. Nur die dritte Kategorie
+deutet wirklich auf die Stromversorgung hin.
 
 ### Neustart-Protokoll
 
@@ -209,9 +231,17 @@ Voraussetzung: .NET 8 SDK.
 PCHelper.exe --selftest
 ```
 
-Führt eine vollständige Diagnose ohne Oberfläche aus, schreibt den HTML-Bericht, protokolliert alle
-Befunde nach `%LOCALAPPDATA%\PCHelper\pchelper.log` und beendet sich mit Exitcode 0 (bzw. 1 bei
+Führt eine vollständige Diagnose ohne Oberfläche aus, schreibt HTML- und PDF-Bericht, protokolliert
+alle Befunde nach `%LOCALAPPDATA%\PCHelper\pchelper.log` und beendet sich mit Exitcode 0 (bzw. 1 bei
 Fehler). Wird auch im CI-Workflow als Rauchtest verwendet.
+
+### PDF-Erzeugung
+
+Der PDF-Export kommt ohne externe Bibliothek aus (`Reporting/PdfWriter.cs`, rund 400 Zeilen).
+Verwendet werden die PDF-Standardschriften Helvetica und Courier, die kein Einbetten erfordern.
+Die Zeilenumbrüche werden mit Arial vermessen – metrisch identisch zu Helvetica, dadurch stimmt
+der Umbruch exakt mit der Darstellung überein. Der Export läuft auf dem Oberflächen-Thread, weil
+die Textvermessung WPF-Schriften benutzt.
 
 ---
 
@@ -224,7 +254,7 @@ src/PCHelper/
   Knowledge/      Wissensdatenbank bekannter Problemmuster
   Monitoring/     Dauerüberwachung, Messreihen, Vorfälle
   Fixes/          Katalog der Reparaturen und deren Ausführung
-  Reporting/      HTML- und Markdown-Berichte
+  Reporting/      Berichte als PDF (eigener Generator), HTML und Markdown
   Update/         Update über GitHub Releases
   ViewModels/     Ansichtslogik
   Views/          Oberfläche (WPF)
@@ -242,7 +272,7 @@ knowledge/        known-issues.json (eingebettet und per HTTPS nachladbar)
 | Vorfälle | `%LOCALAPPDATA%\PCHelper\incidents\` |
 | Sitzungsprotokoll (Start / Herunterfahren) | `%LOCALAPPDATA%\PCHelper\sitzungsprotokoll.txt` |
 | Protokolldatei | `%LOCALAPPDATA%\PCHelper\pchelper.log` |
-| Berichte | `Dokumente\PC Helper\Berichte\` |
+| Berichte (PDF, HTML, CSV) | `Dokumente\PC Helper\Berichte\` |
 
 ---
 

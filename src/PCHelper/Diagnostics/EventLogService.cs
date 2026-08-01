@@ -1,5 +1,6 @@
 using System.Diagnostics.Eventing.Reader;
 using System.Text;
+using System.Text.RegularExpressions;
 using PCHelper.Core;
 
 namespace PCHelper.Diagnostics;
@@ -7,6 +8,16 @@ namespace PCHelper.Diagnostics;
 /// <summary>Ein aufbereiteter Eintrag aus dem Windows-Ereignisprotokoll.</summary>
 public sealed record LogEvent(DateTime Time, int Id, string Provider, string Level, string Message)
 {
+    /// <summary>
+    /// Benannte Datenfelder des Ereignisses (nur gefuellt, wenn beim Abruf
+    /// ausdruecklich angefordert). Beispiel: BugcheckCode bei Kernel-Power 41.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Data { get; init; }
+        = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    public string? DataValue(string name)
+        => Data.TryGetValue(name, out var v) ? v : null;
+
     public string Short
     {
         get
@@ -23,11 +34,19 @@ public sealed record LogEvent(DateTime Time, int Id, string Provider, string Lev
 /// <summary>Abfragen auf das Windows-Ereignisprotokoll (System/Anwendung).</summary>
 public static class EventLogService
 {
+    private static readonly Regex NamedData =
+        new("<Data Name=['\"](?<name>[^'\"]+)['\"]\\s*>(?<value>.*?)</Data>",
+            RegexOptions.Compiled | RegexOptions.Singleline);
+
     /// <summary>
     /// Fuehrt eine XPath-Abfrage auf einem Protokoll aus.
     /// Fehler (fehlende Rechte, beschaedigtes Protokoll) fuehren zu einer leeren Liste.
     /// </summary>
-    public static List<LogEvent> Query(string logName, string xpath, int max = 100)
+    /// <param name="includeData">
+    /// Zusaetzlich die benannten Datenfelder aus dem Ereignis-XML lesen.
+    /// Kostet Rechenzeit, daher nur dort einschalten, wo die Werte gebraucht werden.
+    /// </param>
+    public static List<LogEvent> Query(string logName, string xpath, int max = 100, bool includeData = false)
     {
         var list = new List<LogEvent>();
         try
@@ -53,7 +72,10 @@ public static class EventLogService
                         rec.Id,
                         rec.ProviderName ?? "?",
                         LevelName(rec.Level),
-                        message.Trim()));
+                        message.Trim())
+                    {
+                        Data = includeData ? ReadNamedData(rec) : EmptyData,
+                    });
                 }
             }
         }
@@ -127,6 +149,24 @@ public static class EventLogService
             $"*[System[TimeCreated[@SystemTime>='{from.ToUniversalTime():yyyy-MM-ddTHH:mm:ss.000Z}' " +
             $"and @SystemTime<='{to.ToUniversalTime():yyyy-MM-ddTHH:mm:ss.000Z}']]]";
         return Query(logName, xpath, max);
+    }
+
+    private static readonly Dictionary<string, string> EmptyData = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Liest die benannten Datenfelder aus dem Ereignis-XML.</summary>
+    private static IReadOnlyDictionary<string, string> ReadNamedData(EventRecord rec)
+    {
+        var data = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (Match m in NamedData.Matches(rec.ToXml()))
+                data[m.Groups["name"].Value] = m.Groups["value"].Value.Trim();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Ereignisdaten (ID {rec.Id}) nicht lesbar: {ex.Message}");
+        }
+        return data;
     }
 
     private static string LevelName(byte? level) => level switch

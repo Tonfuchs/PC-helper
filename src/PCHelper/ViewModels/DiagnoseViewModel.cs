@@ -28,6 +28,7 @@ public sealed class DiagnoseViewModel : ObservableObject
         _monitor = monitor;
 
         RunCommand = new RelayCommand(_ => RunAsync(), _ => !IsRunning);
+        ExportPdfCommand = new RelayCommand(_ => ExportPdf(), _ => Result is not null);
         ExportHtmlCommand = new RelayCommand(_ => ExportHtmlAsync(), _ => Result is not null);
         CopyMarkdownCommand = new RelayCommand(_ => CopyMarkdown(), _ => Result is not null);
     }
@@ -36,6 +37,7 @@ public sealed class DiagnoseViewModel : ObservableObject
     public ObservableCollection<Suspicion> Suspicions { get; } = new();
 
     public RelayCommand RunCommand { get; }
+    public RelayCommand ExportPdfCommand { get; }
     public RelayCommand ExportHtmlCommand { get; }
     public RelayCommand CopyMarkdownCommand { get; }
 
@@ -51,6 +53,7 @@ public sealed class DiagnoseViewModel : ObservableObject
             Raise(nameof(WarningCount));
             Raise(nameof(OkCount));
             Raise(nameof(TopSuspicion));
+            ExportPdfCommand.RaiseCanExecuteChanged();
             ExportHtmlCommand.RaiseCanExecuteChanged();
             CopyMarkdownCommand.RaiseCanExecuteChanged();
         }
@@ -139,6 +142,19 @@ public sealed class DiagnoseViewModel : ObservableObject
         : ShowOnlyProblems
             ? $"{OkCount} unauffaellige Befunde ausgeblendet."
             : "Alle Befunde werden angezeigt.";
+
+    /// <summary>
+    /// PDF-Export. Laeuft bewusst auf dem Oberflaechen-Thread, weil die
+    /// Textvermessung fuer den Zeilenumbruch WPF-Schriftarten benutzt.
+    /// </summary>
+    private void ExportPdf()
+    {
+        if (Result is null) return;
+
+        var path = PdfReportBuilder.Write(Result, _incidents.LoadAll(20), _monitor.Telemetry);
+        ProgressText = "PDF gespeichert: " + path;
+        Shell.Open(path);
+    }
 
     private async Task ExportHtmlAsync()
     {

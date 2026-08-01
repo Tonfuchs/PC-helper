@@ -19,7 +19,11 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Content="Bericht speichern" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                        <Button Content="Bericht als PDF" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                                ToolTip="Fuer Support-Anfragen - laesst sich ueberall anhaengen und oeffnen."
+                                Command="{Binding Diagnose.ExportPdfCommand}" />
+                        <Button Content="als HTML" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                                ToolTip="Ausfuehrlicher, oeffnet im Browser."
                                 Command="{Binding Diagnose.ExportHtmlCommand}" />
                         <Button Content="Kurzfassung kopieren" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
                                 Command="{Binding Diagnose.CopyMarkdownCommand}" />

@@ -136,7 +136,14 @@ public sealed class RestartHistoryCheck : ICheck
     }
 }
 
-/// <summary>Unerwartete Neustarts und Abschaltungen (Kernel-Power 41 / EventLog 6008).</summary>
+/// <summary>
+/// Unerwartete Neustarts und Abschaltungen (Kernel-Power 41 / EventLog 6008).
+///
+/// Wichtig ist die Aufschluesselung: Ereignis 41 sagt in seinen Datenfeldern,
+/// ob ein Bluescreen vorausging (BugcheckCode) und ob der Netzschalter gedrueckt
+/// wurde (PowerButtonTimestamp). Ohne diese Unterscheidung wirkt die reine
+/// Gesamtzahl viel dramatischer, als sie ist.
+/// </summary>
 public sealed class UnexpectedShutdownCheck : ICheck
 {
     public string Name => "Unerwartete Neustarts";
@@ -145,10 +152,10 @@ public sealed class UnexpectedShutdownCheck : ICheck
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
         var kernel41 = EventLogService.Query("System",
-            EventLogService.Xpath("Microsoft-Windows-Kernel-Power", ctx.LookbackDays, 41), 60);
+            EventLogService.Xpath("Microsoft-Windows-Kernel-Power", ctx.LookbackDays, 41), 200, includeData: true);
 
         var dirty6008 = EventLogService.Query("System",
-            EventLogService.Xpath("EventLog", ctx.LookbackDays, 6008), 60);
+            EventLogService.Xpath("EventLog", ctx.LookbackDays, 6008), 100);
 
         var total = kernel41.Count + dirty6008.Count;
 
@@ -169,47 +176,114 @@ public sealed class UnexpectedShutdownCheck : ICheck
             });
         }
 
-        var sb = new StringBuilder();
-        if (kernel41.Count > 0)
+        // Aufschluesselung der Ereignisse 41 anhand ihrer Datenfelder.
+        var withBugcheck = new List<LogEvent>();
+        var byPowerButton = new List<LogEvent>();
+        var silent = new List<LogEvent>();
+
+        foreach (var e in kernel41)
         {
-            sb.AppendLine($"Kernel-Power 41 ({kernel41.Count}x) - das System wurde neu gestartet, ohne vorher sauber herunterzufahren:");
-            foreach (var e in kernel41.Take(15)) sb.AppendLine("  " + e);
-            sb.AppendLine();
+            var code = BugCheckCodes.TryParseFromData(e.DataValue("BugcheckCode")) ?? 0;
+            var buttonPressed = ParseNonZero(e.DataValue("PowerButtonTimestamp"))
+                                || e.DataValue("LongPowerButtonPressDetected") is "1" or "true";
+
+            if (code != 0) withBugcheck.Add(e);
+            else if (buttonPressed) byPowerButton.Add(e);
+            else silent.Add(e);
         }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"{kernel41.Count} Ereignisse 'Kernel-Power 41' in den letzten {ctx.LookbackDays} Tagen.");
+        sb.AppendLine("Aufschluesselung nach den Datenfeldern des Ereignisses:");
+        sb.AppendLine($"  {withBugcheck.Count,4}x  mit vorausgegangenem Bluescreen (BugcheckCode gesetzt)");
+        sb.AppendLine($"  {byPowerButton.Count,4}x  Netzschalter wurde gedrueckt (PowerButtonTimestamp gesetzt)");
+        sb.AppendLine($"  {silent.Count,4}x  ohne Vorwarnung - Einfrieren oder Stromverlust");
         if (dirty6008.Count > 0)
+            sb.AppendLine($"  {dirty6008.Count,4}x  zusaetzlich Ereignis 6008 (unerwartetes Herunterfahren)");
+
+        sb.AppendLine();
+        sb.AppendLine("Wichtig: Jeder Bluescreen erzeugt zusaetzlich ein Ereignis 41. Die Bluescreens aus dem " +
+                      "Befund 'Bluescreens vorhanden' stecken in dieser Zahl also bereits mit drin und sind " +
+                      "keine zusaetzlichen Vorfaelle.");
+        sb.AppendLine();
+        sb.AppendLine("Zeitpunkte (neueste zuerst):");
+        foreach (var e in kernel41.Take(25))
         {
-            sb.AppendLine($"Ereignis 6008 ({dirty6008.Count}x) - unerwartetes Herunterfahren:");
-            foreach (var e in dirty6008.Take(15)) sb.AppendLine("  " + e);
+            var code = BugCheckCodes.TryParseFromData(e.DataValue("BugcheckCode")) ?? 0;
+            var art = code != 0
+                ? "Bluescreen " + BugCheckCodes.Describe(code).CodeText
+                : ParseNonZero(e.DataValue("PowerButtonTimestamp")) ? "Netzschalter" : "ohne Vorwarnung";
+            sb.AppendLine($"  {e.Time:dd.MM.yyyy HH:mm:ss}   {art}");
         }
 
         var last = kernel41.Concat(dirty6008).Max(e => e.Time);
+
+        // Die Bewertung richtet sich danach, was wirklich passiert ist.
+        Severity severity;
+        string summary, recommendation;
+        Dictionary<Cause, double> causes;
+
+        if (silent.Count > 0)
+        {
+            severity = Severity.Critical;
+            summary = $"{kernel41.Count} unerwartete Abschaltungen, davon {silent.Count} ohne jede Vorwarnung " +
+                      $"(kein Bluescreen, kein Netzschalter) - zuletzt am {last:dd.MM.yyyy HH:mm}.";
+            recommendation =
+                "Abschaltungen ohne Vorwarnung sind das ernsteste Muster: Der Rechner geht schlagartig aus oder " +
+                "friert komplett ein. Typische Ursachen in dieser Reihenfolge:\n\n" +
+                "1) Stromversorgung. Alle PCIe-Stromkabel der Grafikkarte fest einstecken, getrennte Kabelstraenge " +
+                "statt Daisy-Chain verwenden, den 12V-2x6-Stecker auf vollstaendiges Einrasten pruefen. " +
+                "Steckdosenleiste testweise umgehen.\n" +
+                "2) Speicher- bzw. CPU-Instabilitaet. EXPO/XMP im BIOS deaktivieren und beobachten.\n" +
+                "3) Ueberhitzung. Die Dauerueberwachung dieser App zeigt, ob es kurz davor heiss wurde.";
+            causes = new Dictionary<Cause, double> { [Cause.PowerSupply] = 0.6, [Cause.Memory] = 0.3, [Cause.Thermal] = 0.2 };
+        }
+        else if (byPowerButton.Count > 0)
+        {
+            severity = Severity.Warning;
+            summary = $"{kernel41.Count} unerwartete Abschaltungen, davon {byPowerButton.Count} durch Druecken " +
+                      $"des Netzschalters - zuletzt am {last:dd.MM.yyyy HH:mm}.";
+            recommendation =
+                "Diese Abschaltungen hat jemand selbst ausgeloest: Der Netzschalter wurde gedrueckt, weil sich das " +
+                "System nicht mehr bedienen liess. Genau das passiert bei einem Schwarzbild.\n\n" +
+                "Das heisst: Die Stromversorgung ist hier NICHT der Verdaechtige - der Rechner ist nicht von allein " +
+                "ausgegangen. Die Ursache liegt davor, im Schwarzbild selbst. Weiter bei Grafiktreiber und " +
+                "Monitorverbindung suchen.\n\n" +
+                "Die Anzahl ist zugleich ein gutes Mass fuer die Haeufigkeit des Problems.";
+            causes = new Dictionary<Cause, double> { [Cause.GpuDriver] = 0.4, [Cause.DisplayLink] = 0.4 };
+        }
+        else
+        {
+            severity = Severity.Warning;
+            summary = $"{kernel41.Count} unerwartete Abschaltungen, alle im Zusammenhang mit einem Bluescreen - " +
+                      $"zuletzt am {last:dd.MM.yyyy HH:mm}.";
+            recommendation =
+                "Alle diese Ereignisse gehoeren zu Bluescreens und sind daher keine eigenstaendigen Vorfaelle. " +
+                "Massgeblich ist der Befund 'Bluescreens vorhanden' mit den dortigen Stoppcodes.";
+            causes = new Dictionary<Cause, double> { [Cause.Memory] = 0.2 };
+        }
 
         var f = new Finding
         {
             Id = "unexpected-shutdown",
             Category = Category,
             Title = "Rechner ist unerwartet ausgegangen bzw. neu gestartet",
-            Severity = Severity.Critical,
-            Summary = $"{total} unerwartete Abschaltungen in den letzten {ctx.LookbackDays} Tagen, zuletzt am {last:dd.MM.yyyy HH:mm}.",
-            Detail = sb.ToString().TrimEnd() +
-                     "\n\nEinordnung: Diese Ereignisse entstehen, wenn Windows keine Gelegenheit mehr hatte, sich " +
-                     "ordentlich zu beenden - also bei hartem Ausschalten, Stromausfall, Netzteil-Schutzabschaltung " +
-                     "oder einem Komplettabsturz ohne Bluescreen.",
+            Severity = severity,
+            Summary = summary,
+            Detail = sb.ToString().TrimEnd(),
             Occurrences = total,
             LastOccurrence = last,
-            Recommendation =
-                "Wichtige Abgrenzung zum Schwarzbild-Problem: Wenn beim Schwarzbild der TON WEITERLAEUFT, gehoeren diese " +
-                "Ereignisse NICHT dazu - dann stammen sie von normalen harten Ausschaltvorgaengen (z. B. Netzschalter " +
-                "gedrueckt, weil nichts mehr ging).\n\n" +
-                "Wenn dagegen alles gleichzeitig ausgeht (Bild, Ton, Luefter), deutet das auf die Stromversorgung hin:\n" +
-                "1) Alle PCIe-Stromkabel der Grafikkarte fest einstecken; getrennte Kabelstraenge statt Daisy-Chain verwenden.\n" +
-                "2) Steckdosenleiste/Verlaengerung testweise umgehen.\n" +
-                "3) Netzteil unter Last beobachten (Werte der Dauerueberwachung dieser App).",
-            Causes = new Dictionary<Cause, double> { [Cause.PowerSupply] = 0.6, [Cause.Thermal] = 0.2, [Cause.Memory] = 0.2 },
+            Recommendation = recommendation,
+            Causes = causes,
         };
 
         return Task.FromResult<IEnumerable<Finding>>(new[] { f });
     }
+
+    private static bool ParseNonZero(string? value)
+        => !string.IsNullOrWhiteSpace(value)
+           && long.TryParse(value, out var v)
+           && v != 0;
 }
 
 /// <summary>Bluescreens und zugehoerige Absturzabbilder.</summary>
@@ -218,10 +292,14 @@ public sealed class BugCheckCheck : ICheck
     public string Name => "Bluescreens";
     public string Category => "Stabilitaet";
 
+    /// <summary>Ein einzelner Absturz mit Zeitpunkt und - sofern ermittelbar - Stoppcode.</summary>
+    private sealed record Crash(DateTime Time, uint? Code, string Source);
+
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
         var bugchecks = EventLogService.Query("System",
-            EventLogService.Xpath("Microsoft-Windows-WER-SystemErrorReporting", ctx.LookbackDays, 1001), 40);
+            EventLogService.Xpath("Microsoft-Windows-WER-SystemErrorReporting", ctx.LookbackDays, 1001),
+            100, includeData: true);
 
         var dumps = ListDumps(@"C:\Windows\Minidump", "*.dmp");
 
@@ -238,45 +316,153 @@ public sealed class BugCheckCheck : ICheck
             });
         }
 
+        var crashes = CollectCrashes(bugchecks, ctx.LookbackDays);
+        var decoded = crashes.Where(c => c.Code is not null).ToList();
+
+        // Nach Stoppcode gruppieren - das ist die eigentliche Auswertung.
+        var groups = decoded
+            .GroupBy(c => c.Code!.Value)
+            .Select(g => new
+            {
+                Info = BugCheckCodes.Describe(g.Key),
+                Count = g.Count(),
+                Last = g.Max(c => c.Time),
+            })
+            .OrderByDescending(g => g.Count)
+            .ToList();
+
         var sb = new StringBuilder();
-        if (bugchecks.Count > 0)
+        sb.AppendLine($"{crashes.Count} Bluescreens in den letzten {ctx.LookbackDays} Tagen.");
+        sb.AppendLine();
+
+        if (groups.Count > 0)
         {
-            sb.AppendLine($"{bugchecks.Count} Bluescreen-Meldungen:");
-            foreach (var e in bugchecks.Take(15)) sb.AppendLine("  " + e);
+            sb.AppendLine("Nach Stoppcode aufgeschluesselt:");
             sb.AppendLine();
+            foreach (var g in groups)
+            {
+                sb.AppendLine($"  {g.Count}x  {g.Info.Display}");
+                sb.AppendLine($"        {g.Info.Meaning}");
+                sb.AppendLine($"        Zuletzt am {g.Last:dd.MM.yyyy HH:mm}");
+                sb.AppendLine($"        Vorgehen: {g.Info.Advice}");
+                sb.AppendLine();
+            }
         }
+
+        var undecoded = crashes.Count - decoded.Count;
+        if (undecoded > 0)
+            sb.AppendLine($"Bei {undecoded} Abstuerzen liess sich kein Stoppcode aus dem Ereignis lesen.\n");
+
+        sb.AppendLine("Einzelne Zeitpunkte (neueste zuerst):");
+        foreach (var c in crashes.OrderByDescending(c => c.Time).Take(25))
+            sb.AppendLine($"  {c.Time:dd.MM.yyyy HH:mm:ss}   " +
+                          (c.Code is null ? "Stoppcode unbekannt" : BugCheckCodes.Describe(c.Code.Value).Display));
+
         if (dumps.Count > 0)
         {
+            sb.AppendLine();
             sb.AppendLine($"{dumps.Count} Absturzabbilder unter C:\\Windows\\Minidump:");
-            foreach (var d in dumps.Take(15)) sb.AppendLine($"  {d.LastWriteTime:dd.MM.yyyy HH:mm}  {d.Name}  ({d.Length / 1024} KB)");
+            foreach (var d in dumps.Take(15))
+                sb.AppendLine($"  {d.LastWriteTime:dd.MM.yyyy HH:mm}  {d.Name}  ({d.Length / 1024} KB)");
         }
+
+        // Ursachengewichte aus den tatsaechlich aufgetretenen Stoppcodes ableiten,
+        // gewichtet nach ihrer Haeufigkeit.
+        var causes = new Dictionary<Cause, double>();
+        if (decoded.Count > 0)
+        {
+            foreach (var g in groups)
+            {
+                double share = g.Count / (double)decoded.Count;
+                foreach (var (cause, weight) in g.Info.Causes)
+                    causes[cause] = causes.GetValueOrDefault(cause) + weight * share;
+            }
+        }
+        else
+        {
+            causes[Cause.Memory] = 0.4;
+            causes[Cause.GpuDriver] = 0.3;
+            causes[Cause.Software] = 0.2;
+        }
+
+        var top = groups.FirstOrDefault();
+        var mixed = groups.Count >= 3;
+
+        var recommendation = new StringBuilder();
+        if (top is not null)
+        {
+            recommendation.AppendLine($"Haeufigster Stoppcode: {top.Info.Display} ({top.Count} von {decoded.Count}).");
+            recommendation.AppendLine($"{top.Info.Meaning}");
+            recommendation.AppendLine();
+            recommendation.AppendLine(top.Info.Advice);
+        }
+
+        if (mixed)
+        {
+            recommendation.AppendLine();
+            recommendation.AppendLine(
+                $"Wichtig: Es traten {groups.Count} verschiedene Stoppcodes auf. Wahllos wechselnde Stoppcodes " +
+                "sprechen fast immer fuer instabile Hardware und nicht fuer einen einzelnen defekten Treiber. " +
+                "In dieser Reihenfolge vorgehen: EXPO/XMP im BIOS deaktivieren, BIOS aktualisieren, " +
+                "anschliessend MemTest86 ueber mehrere Durchlaeufe.");
+        }
+
+        recommendation.AppendLine();
+        recommendation.Append(
+            "Bei einem neuen Rechner mit Herstellergarantie: Diese Auswertung zusammen mit dem Bericht " +
+            "dem Haendler vorlegen. Sie ist als Mangelnachweis belastbar.");
 
         var f = new Finding
         {
             Id = "bugcheck",
             Category = Category,
-            Title = "Bluescreens vorhanden",
+            Title = top is null
+                ? "Bluescreens vorhanden"
+                : $"Bluescreens vorhanden - haeufigster Stoppcode {top.Info.Name}",
             Severity = Severity.Critical,
-            Summary = bugchecks.Count > 0
-                ? $"{bugchecks.Count} Bluescreens in den letzten {ctx.LookbackDays} Tagen."
-                : $"{dumps.Count} Absturzabbilder gefunden.",
+            Summary = decoded.Count > 0
+                ? $"{crashes.Count} Bluescreens in den letzten {ctx.LookbackDays} Tagen, " +
+                  $"{groups.Count} verschiedene Stoppcode(s), haeufigster: {top!.Info.Name} ({top.Count}x)."
+                : $"{Math.Max(crashes.Count, dumps.Count)} Bluescreens bzw. Absturzabbilder in den letzten {ctx.LookbackDays} Tagen.",
             Detail = sb.ToString().TrimEnd(),
-            Occurrences = Math.Max(bugchecks.Count, dumps.Count),
-            LastOccurrence = bugchecks.Count > 0 ? bugchecks.Max(e => e.Time) : dumps.Max(d => d.LastWriteTime),
-            Recommendation =
-                "Der Stoppcode in der Meldung ist der entscheidende Hinweis:\n" +
-                "- VIDEO_TDR_FAILURE / VIDEO_SCHEDULER_INTERNAL_ERROR -> Grafiktreiber oder Grafikkarte\n" +
-                "- MEMORY_MANAGEMENT / PAGE_FAULT_IN_NONPAGED_AREA / IRQL_NOT_LESS_OR_EQUAL -> haeufig Arbeitsspeicher (EXPO testweise aus)\n" +
-                "- WHEA_UNCORRECTABLE_ERROR -> Hardwarefehler, oft CPU/Speichercontroller oder Uebertaktung\n" +
-                "- KERNEL_SECURITY_CHECK_FAILURE -> Treiber\n\n" +
-                "Die Abbilder lassen sich mit dem kostenlosen Werkzeug WhoCrashed oder mit WinDbg auswerten.",
-            Causes = new Dictionary<Cause, double>
-            {
-                [Cause.Memory] = 0.4, [Cause.GpuDriver] = 0.3, [Cause.Software] = 0.2, [Cause.OperatingSystem] = 0.1,
-            },
+            Occurrences = Math.Max(crashes.Count, dumps.Count),
+            LastOccurrence = crashes.Count > 0 ? crashes.Max(c => c.Time) : dumps.Max(d => d.LastWriteTime),
+            Recommendation = recommendation.ToString().Trim(),
+            Causes = causes,
         };
 
         return Task.FromResult<IEnumerable<Finding>>(new[] { f });
+    }
+
+    /// <summary>
+    /// Sammelt die Abstuerze aus Ereignis 1001 und ergaenzt sie um Bluescreens,
+    /// die nur ueber Kernel-Power 41 belegt sind (kommt vor, wenn Windows den
+    /// Fehlerbericht nicht mehr schreiben konnte).
+    /// </summary>
+    private static List<Crash> CollectCrashes(IReadOnlyList<LogEvent> bugchecks, int days)
+    {
+        var crashes = bugchecks
+            .Select(e => new Crash(
+                e.Time,
+                BugCheckCodes.TryParseFromMessage(e.Message)
+                    ?? BugCheckCodes.TryParseFromData(e.DataValue("param1")),
+                "Ereignis 1001"))
+            .ToList();
+
+        var kernel41 = EventLogService.Query("System",
+            EventLogService.Xpath("Microsoft-Windows-Kernel-Power", days, 41), 200, includeData: true);
+
+        foreach (var e in kernel41)
+        {
+            var code = BugCheckCodes.TryParseFromData(e.DataValue("BugcheckCode"));
+            if (code is null or 0) continue;
+
+            // Derselbe Absturz taucht in beiden Protokollen auf - nicht doppelt zaehlen.
+            bool alreadyKnown = crashes.Any(c => Math.Abs((c.Time - e.Time).TotalMinutes) <= 10);
+            if (!alreadyKnown) crashes.Add(new Crash(e.Time, code, "Ereignis 41"));
+        }
+
+        return crashes.OrderByDescending(c => c.Time).ToList();
     }
 
     internal static List<FileInfo> ListDumps(string dir, string pattern)
