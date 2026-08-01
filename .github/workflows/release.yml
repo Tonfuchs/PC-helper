@@ -1,0 +1,97 @@
+name: Release
+
+# Veroeffentlichung: Tag setzen und pushen, z. B.
+#   git tag v1.1.0 && git push origin v1.1.0
+# Der Rest laeuft automatisch. Die in der App eingebaute Update-Funktion
+# findet danach das Asset "PCHelper.exe" im neuesten Release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version ohne führendes v, z. B. 1.2.3"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Quellcode auschecken
+        uses: actions/checkout@v4
+
+      - name: .NET einrichten
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Version aus Tag ermitteln
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ github.event.inputs.version }}"
+          } else {
+            $version = "${{ github.ref_name }}" -replace '^v', ''
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version '$version' ist nicht im Format x.y.z"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+
+      - name: Abhaengigkeiten wiederherstellen
+        run: dotnet restore PCHelper.sln
+
+      - name: Veroeffentlichen (eigenstaendige EXE)
+        run: >
+          dotnet publish src/PCHelper/PCHelper.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -p:Version=${{ steps.version.outputs.version }}
+          -p:AssemblyVersion=${{ steps.version.outputs.version }}.0
+          -p:FileVersion=${{ steps.version.outputs.version }}.0
+          -p:InformationalVersion=${{ steps.version.outputs.version }}
+          -o publish
+
+      - name: Rauchtest der veroeffentlichten EXE
+        shell: pwsh
+        run: |
+          $exe = "publish\PCHelper.exe"
+          if (-not (Test-Path $exe)) { throw "PCHelper.exe wurde nicht erzeugt." }
+          $size = (Get-Item $exe).Length / 1MB
+          Write-Host ("Groesse: {0:N1} MB" -f $size)
+          if ($size -lt 20) { throw "Die EXE ist unplausibel klein - vermutlich kein eigenstaendiges Paket." }
+
+      - name: Pruefsummen erzeugen
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash publish\PCHelper.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash *PCHelper.exe" | Out-File publish\SHA256SUMS.txt -Encoding ascii
+          Get-Content publish\SHA256SUMS.txt
+
+      - name: Release anlegen und Dateien anhaengen
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v${{ steps.version.outputs.version }}"
+          $exists = gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag publish/PCHelper.exe publish/SHA256SUMS.txt --clobber
+          } else {
+            gh release create $tag publish/PCHelper.exe publish/SHA256SUMS.txt `
+              --title "PC Helper $tag" `
+              --generate-notes
+          }

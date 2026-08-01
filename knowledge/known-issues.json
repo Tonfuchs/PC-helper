@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-08-01",
+  "note": "Wissensdatenbank fuer PC Helper. Wird von der App beim Start aus dem GitHub-Repo nachgeladen (raw), sonst wird die eingebettete Kopie benutzt. Neue Eintraege hier ergaenzen wirken SOFORT bei allen Nutzern - ohne App-Update.",
+  "issues": [
+    {
+      "id": "kb-nvidia-50-dp-blackscreen",
+      "title": "GeForce RTX 50: gemeldete Schwarzbild-Faelle an DisplayPort",
+      "category": "Grafik",
+      "severity": "info",
+      "match": { "gpuNameContains": ["RTX 50"], "requiresDisplayPort": true },
+      "summary": "Fuer die RTX-50-Serie gibt es verbreitete Nutzerberichte ueber sporadisches Schwarzbild bei laufendem Ton an DisplayPort - haeufig im Zusammenspiel mit hohen Bildwiederholraten, DSC und bestimmten Treiberversionen.",
+      "detail": "Typisches Muster: Bild weg, Ton laeuft weiter, Rechner reagiert teils noch auf Blindeingaben. Ursache ist dann kein Absturz, sondern ein Abriss der Display-Verbindung (DP-Link-Training) oder ein Treiber-Reset (TDR).\n\nNVIDIA stellt fuer die RTX-50-Serie ein 'Display Firmware Update Tool' bereit, das genau solche Schwarzbild-/Kompatibilitaetsfaelle an bestimmten Monitoren adressiert. Das ist ein Firmware-Update der Grafikkarte, unabhaengig vom Treiber.",
+      "recommendation": "1) Display-Firmware der Grafikkarte pruefen/aktualisieren (NVIDIA Display Firmware Update Tool).\n2) Testweise andere DisplayPort-Kabel verwenden - zertifiziert DP40/DP80 bzw. VESA-zertifiziert.\n3) Testweise 60 Hz statt maximaler Bildwiederholrate fahren; wenn das Problem verschwindet, ist die Signalstrecke der Verdaechtige.",
+      "causes": { "GpuDriver": 0.4, "DisplayLink": 0.6 },
+      "links": [
+        { "label": "NVIDIA Treiber & Tools", "url": "https://www.nvidia.com/de-de/geforce/drivers/" }
+      ]
+    },
+    {
+      "id": "kb-ddr5-expo-instability",
+      "title": "DDR5 mit EXPO/XMP: haeufigste Quelle sporadischer Instabilitaet",
+      "category": "Arbeitsspeicher",
+      "severity": "info",
+      "match": { "memoryOverclocked": true },
+      "summary": "Aktives EXPO/XMP ist Uebertaktung. Ein System kann monatelang 'stabil' wirken und trotzdem sporadisch Fehler produzieren - inklusive Schwarzbild, Freezes und Neustarts.",
+      "detail": "Bei AMD AM5 haengt die Speicherstabilitaet stark an AGESA/BIOS-Version, FCLK und Speichercontroller-Spannungen. Zwei Riegel sind unkritischer als vier, aber auch 2x16 GB koennen mit aggressivem EXPO-Profil grenzwertig laufen.",
+      "recommendation": "Zum Ausschliessen: EXPO/XMP im BIOS testweise deaktivieren (laeuft dann mit JEDEC-Standardtakt) und beobachten, ob das Problem verschwindet. Danach ggf. EXPO wieder aktivieren und den Takt eine Stufe reduzieren.",
+      "causes": { "Memory": 0.8, "Bios": 0.2 },
+      "links": []
+    },
+    {
+      "id": "kb-am5-bios-agesa",
+      "title": "AM5 / X870: BIOS-Version ist relevant fuer Stabilitaet",
+      "category": "Mainboard",
+      "severity": "info",
+      "match": { "cpuNameContains": ["Ryzen 9", "Ryzen 7", "Ryzen 5"], "biosOlderThanDays": 240 },
+      "summary": "Auf AM5-Boards beheben BIOS-/AGESA-Updates regelmaessig Probleme mit Speicherkompatibilitaet, PCIe-Training und Boot-Verhalten.",
+      "detail": "Wenn das BIOS aelter als ein gutes halbes Jahr ist, laeuft das System oft noch mit einer AGESA-Version, die bekannte Speicher- und PCIe-Themen enthaelt. Gerade bei neuen CPUs (X3D) und schnellem DDR5 lohnt das Update.",
+      "recommendation": "BIOS-Version mit der aktuellen Version auf der Hersteller-Supportseite des Mainboards vergleichen und ggf. aktualisieren. Danach EXPO neu setzen und Einstellungen pruefen.",
+      "causes": { "Bios": 0.6, "Memory": 0.3, "DisplayLink": 0.1 },
+      "links": []
+    },
+    {
+      "id": "kb-psu-transient-highend",
+      "title": "Lastspitzen: Netzteil-Verhalten bei High-End-GPU",
+      "category": "Stromversorgung",
+      "severity": "info",
+      "match": { "gpuNameContains": ["RTX 40", "RTX 50", "RX 7", "RX 9"] },
+      "summary": "Moderne Grafikkarten erzeugen sehr kurze Lastspitzen weit oberhalb ihrer Nennleistung. Ein Netzteil, das darauf empfindlich reagiert, fuehrt zu Blackouts oder Neustarts unter Last.",
+      "detail": "Unterscheidungsmerkmal: Wenn der Rechner komplett aus- oder neu startet (Luefter stoppen, Ton weg), spricht das fuer Stromversorgung. Wenn nur das Bild weg ist und der Ton weiterlaeuft, ist das eher Signal/Treiber.",
+      "recommendation": "Sicherstellen, dass die PCIe-Stromversorgung ueber getrennte Kabelstraenge direkt vom Netzteil kommt (keine Daisy-Chain-Adapter), und dass ein evtl. 12V-2x6-Stecker vollstaendig eingerastet ist.",
+      "causes": { "PowerSupply": 0.7, "Thermal": 0.1 },
+      "links": []
+    },
+    {
+      "id": "kb-overlay-tools",
+      "title": "Overlay- und Tuning-Software als Ausloeser",
+      "category": "Software",
+      "severity": "info",
+      "match": { "processNameContains": ["MSIAfterburner", "RTSS", "iCUE", "ArmouryCrate", "AISuite", "SignalRgb", "OpenRGB"] },
+      "summary": "Overlays und Tuning-Tools haengen sich tief in den Grafiktreiber bzw. in die Hardwaresteuerung ein und sind eine wiederkehrende Ursache fuer Schwarzbilder und Treiber-Resets.",
+      "detail": "Besonders relevant: Afterburner/RivaTuner (Overlay + GPU-Spannungskurve), Corsair iCUE und ASUS Armoury Crate (Hardwaresteuerung, teilweise mit eigenen Kernel-Treibern).",
+      "recommendation": "Zum Test: alle Tuning-/Overlay-Tools beenden und aus dem Autostart nehmen, dann 1-2 Tage beobachten. Erst danach einzeln wieder aktivieren.",
+      "causes": { "Software": 0.7, "GpuDriver": 0.3 },
+      "links": []
+    },
+    {
+      "id": "kb-fast-startup",
+      "title": "Windows-Schnellstart erzeugt sporadische Treiber-Zustaende",
+      "category": "Energie",
+      "severity": "info",
+      "match": { "fastStartupEnabled": true },
+      "summary": "Der Windows-Schnellstart faehrt den Rechner nicht wirklich herunter, sondern legt den Kernel in eine Ruhezustandsdatei. Treiber- und Geraetezustaende werden dadurch ueber Tage hinweg konserviert.",
+      "detail": "Das ist ein klassischer Grund dafuer, warum Probleme 'mal da und mal nicht' sind: Ein defekter Zustand wird beim Herunterfahren gespeichert und beim naechsten Start wiederhergestellt. Ein echter Neustart raeumt auf - Herunterfahren nicht.",
+      "recommendation": "Schnellstart deaktivieren (in dieser App als Ein-Klick-Reparatur enthalten). Danach ist 'Herunterfahren' wieder ein echtes Herunterfahren.",
+      "causes": { "PowerSettings": 0.7, "GpuDriver": 0.3 },
+      "links": []
+    }
+  ]
+}

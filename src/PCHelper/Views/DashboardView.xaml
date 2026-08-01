@@ -1,0 +1,136 @@
+<UserControl x:Class="PCHelper.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="28,20,20,28">
+        <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+
+            <!-- Start -->
+            <Border Style="{StaticResource Card}" Padding="20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                        <TextBlock Text="Vollstaendige Pruefung starten" Style="{StaticResource H2}" />
+                        <TextBlock Style="{StaticResource Muted}"
+                                   Text="{Binding Diagnose.SummaryText}" />
+                        <ProgressBar Value="{Binding Diagnose.ProgressValue, Mode=OneWay}" Maximum="100" Margin="0,12,0,6"
+                                     Visibility="{Binding Diagnose.IsRunning, Converter={StaticResource BoolVis}}" />
+                        <TextBlock Text="{Binding Diagnose.ProgressText}" Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <Button Grid.Column="1" Content="Jetzt pruefen" Style="{StaticResource PrimaryButton}"
+                            Padding="22,12" FontSize="14" VerticalAlignment="Center"
+                            Command="{Binding Diagnose.RunCommand}" />
+                </Grid>
+            </Border>
+
+            <!-- Kennzahlen -->
+            <UniformGrid Columns="4" Margin="0,4,0,10"
+                         Visibility="{Binding Diagnose.HasResult, Converter={StaticResource BoolVis}}">
+                <Border Style="{StaticResource Card}" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Diagnose.CriticalCount}" FontSize="30" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Crit}" />
+                        <TextBlock Text="kritisch" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Diagnose.WarningCount}" FontSize="30" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Warn}" />
+                        <TextBlock Text="auffaellig" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Diagnose.OkCount}" FontSize="30" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Ok}" />
+                        <TextBlock Text="in Ordnung" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Monitoring.Incidents.Count}" FontSize="30" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Accent}" />
+                        <TextBlock Text="Vorfaelle" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Verdachtsliste -->
+            <TextBlock Text="Wo das Problem am wahrscheinlichsten liegt" Style="{StaticResource H2}" Margin="0,12,0,8"
+                       Visibility="{Binding Diagnose.HasResult, Converter={StaticResource BoolVis}}" />
+
+            <ItemsControl ItemsSource="{Binding Diagnose.Suspicions}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource Card}" Padding="16,14">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" />
+                                    <Border Grid.Column="1" Style="{StaticResource Chip}">
+                                        <TextBlock Text="{Binding Rank}" FontSize="11" FontWeight="SemiBold" />
+                                    </Border>
+                                </Grid>
+
+                                <ProgressBar Value="{Binding Percent, Mode=OneWay}" Maximum="100" Margin="0,10,0,8" />
+
+                                <TextBlock Text="{Binding Hint}" Style="{StaticResource Muted}" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Vorgehensempfehlung -->
+            <TextBlock Text="Empfohlenes Vorgehen" Style="{StaticResource H2}" Margin="0,18,0,8" />
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,12"
+                               Text="Sporadische Fehler findet man nicht durch Raten, sondern durch systematisches Ausschliessen. Diese Reihenfolge hat sich bewaehrt:" />
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="1. Ueberwachung laufen lassen" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Muted}"
+                                   Text="Die Dauerueberwachung aktiviert lassen. Sobald der Bildschirm schwarz wird, hinterher auf 'Vorfall melden' klicken - dann sind die Messwerte der Minuten davor gesichert." />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="2. Nur eine Sache auf einmal aendern" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Muted}"
+                                   Text="Nach jeder Aenderung zwei bis drei Tage beobachten. Wer drei Dinge gleichzeitig aendert, weiss am Ende nicht, welche geholfen hat." />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="3. Bei 'Bild weg, Ton laeuft weiter' zuerst die Signalstrecke" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Muted}"
+                                   Text="Anderes DisplayPort-Kabel, testweise 60 Hz, testweise nur ein Monitor. Diese drei Tests kosten nichts und schliessen die haeufigste Ursache aus." />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="4. Danach Treiber und Windows-Einstellungen" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Muted}"
+                                   Text="Grafiktreiber sauber neu installieren (mit DDU), Schnellstart abschalten, Overlay-Software beenden. Alles im Bereich 'Reparaturen' vorbereitet." />
+                    </StackPanel>
+
+                    <StackPanel>
+                        <TextBlock Text="5. Zuletzt der Arbeitsspeicher" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Muted}"
+                                   Text="EXPO/XMP im BIOS abschalten und beobachten. Aufwaendig, aber der einzige zuverlaessige Test - und bei neuen Rechnern mit schnellem DDR5 ein haeufiger Treffer." />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource Caption}" Margin="2,6,0,0"
+                       Text="Hinweis: Diese App aendert von sich aus nichts am System. Reparaturen werden nur ausgefuehrt, wenn sie ausdruecklich bestaetigt werden." />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

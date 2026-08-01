@@ -1,0 +1,26 @@
+## .NET / Visual Studio
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+publish/
+artifacts/
+*.user
+*.suo
+*.userprefs
+.vs/
+.vscode/
+*.binlog
+
+## Rider
+.idea/
+
+## Build-Ausgaben
+*.dll
+*.pdb
+!**/knowledge/*.json
+
+## OS
+Thumbs.db
+desktop.ini
+.DS_Store

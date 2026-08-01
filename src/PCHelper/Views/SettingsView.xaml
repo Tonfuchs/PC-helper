@@ -1,0 +1,114 @@
+<UserControl x:Class="PCHelper.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="28,16,20,28">
+        <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+
+            <!-- Verhalten -->
+            <TextBlock Text="Verhalten" Style="{StaticResource H2}" />
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <CheckBox Content="Mit Windows starten" IsChecked="{Binding StartWithWindows}" />
+                    <TextBlock Style="{StaticResource Caption}" Margin="28,0,0,10"
+                               Text="Empfohlen: Nur wenn die App laeuft, werden Messwerte aufgezeichnet." />
+
+                    <CheckBox Content="Ueberwachung automatisch starten" IsChecked="{Binding AutoStartMonitoring}" />
+                    <CheckBox Content="Beim Schliessen in den Infobereich minimieren" IsChecked="{Binding MinimizeToTray}" />
+                    <TextBlock Style="{StaticResource Caption}" Margin="28,0,0,0"
+                               Text="Zum vollstaendigen Beenden das Symbol im Infobereich der Taskleiste verwenden." />
+                </StackPanel>
+            </Border>
+
+            <!-- Aufzeichnung -->
+            <TextBlock Text="Aufzeichnung" Style="{StaticResource H2}" Margin="0,14,0,8" />
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="110" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <TextBlock Text="Messintervall in Sekunden" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Caption}"
+                                       Text="Kleinere Werte liefern feinere Verlaeufe, kosten aber etwas mehr Rechenzeit. 5 Sekunden sind ein guter Kompromiss." />
+                        </StackPanel>
+                        <TextBox Grid.Column="1" VerticalAlignment="Center"
+                                 Text="{Binding SampleIntervalSeconds, UpdateSourceTrigger=LostFocus}" />
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="110" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <TextBlock Text="Messwerte aufbewahren (Tage)" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Caption}"
+                                       Text="Aeltere Aufzeichnungen werden beim Start automatisch geloescht." />
+                        </StackPanel>
+                        <TextBox Grid.Column="1" VerticalAlignment="Center"
+                                 Text="{Binding TelemetryRetentionDays, UpdateSourceTrigger=LostFocus}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Updates -->
+            <TextBlock Text="Updates" Style="{StaticResource H2}" Margin="0,14,0,8" />
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <CheckBox Content="Beim Start automatisch nach Updates suchen" IsChecked="{Binding AutoCheckUpdates}" />
+                    <CheckBox Content="Wissensdatenbank beim Start aktualisieren" IsChecked="{Binding AutoRefreshKnowledgeBase}" />
+                    <TextBlock Style="{StaticResource Caption}" Margin="28,0,0,12"
+                               Text="Die Wissensdatenbank enthaelt bekannte Problemmuster. Sie wird aus dem Repository geladen und wirkt sofort - ohne Programm-Update." />
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="GitHub-Benutzer / Organisation" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                            <TextBox Text="{Binding RepoOwner, UpdateSourceTrigger=LostFocus}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Repository" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                            <TextBox Text="{Binding RepoName, UpdateSourceTrigger=LostFocus}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="{Binding KnowledgeText}" Style="{StaticResource Caption}" Margin="0,0,0,10" />
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Jetzt nach Updates suchen" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                                Command="{Binding CheckUpdateCommand}" />
+                        <Button Content="Wissensdatenbank laden" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                                Command="{Binding RefreshKnowledgeCommand}" />
+                        <Button Content="Projektseite" Style="{StaticResource SecondaryButton}"
+                                Command="{Binding OpenRepoCommand}" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Caption}" Margin="0,10,0,0"
+                               Visibility="{Binding UpdateStatus, Converter={StaticResource NotEmpty}}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Info -->
+            <TextBlock Text="Ueber" Style="{StaticResource H2}" Margin="0,14,0,8" />
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{Binding VersionText}" FontWeight="SemiBold" />
+                    <TextBlock Style="{StaticResource Muted}" Margin="0,6,0,0"
+                               Text="PC Helper untersucht sporadische Windows-Probleme - insbesondere Schwarzbilder bei laufendem System. Alle Daten bleiben auf diesem Rechner; es werden ausschliesslich Updates und die Wissensdatenbank von GitHub abgerufen." />
+                    <TextBlock Style="{StaticResource Muted}" Margin="0,10,0,0"
+                               Text="Quelloffen unter der MIT-Lizenz." />
+                    <Button Content="Protokolldatei oeffnen" Style="{StaticResource SecondaryButton}"
+                            HorizontalAlignment="Left" Margin="0,12,0,0"
+                            Command="{Binding OpenLogCommand}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

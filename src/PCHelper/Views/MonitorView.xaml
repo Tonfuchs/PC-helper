@@ -1,0 +1,236 @@
+<UserControl x:Class="PCHelper.Views.MonitorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:PCHelper.Controls">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="28,16,20,28">
+        <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+
+            <!-- Steuerung -->
+            <Border Style="{StaticResource Card}" Padding="16,14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="{Binding Monitoring.StateText}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="0,3,0,0"
+                                   Text="Ein Schwarzbild hinterlaesst von selbst keine Spuren. Deshalb werden hier fortlaufend Messwerte weggeschrieben - inklusive eines Zeitstempels, der auch einen harten Ausfall ueberlebt." />
+                    </StackPanel>
+
+                    <Button Grid.Column="1" Content="{Binding Monitoring.ToggleText}"
+                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"
+                            Command="{Binding Monitoring.ToggleCommand}" />
+                </Grid>
+            </Border>
+
+            <!-- Rueckfrage nach einem Neustart -->
+            <Border CornerRadius="10" Padding="16,14" Margin="0,0,0,10"
+                    Background="{StaticResource AccentSoft}"
+                    Visibility="{Binding Monitoring.ShowRestartPrompt, Converter={StaticResource BoolVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                        <TextBlock Text="Kurze Rueckfrage" FontWeight="SemiBold" FontSize="14" />
+                        <TextBlock Text="{Binding Monitoring.RestartPromptText}" Style="{StaticResource Muted}"
+                                   Margin="0,3,0,0" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="Nein, normal" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                                Command="{Binding Monitoring.DismissRestartPromptCommand}" />
+                        <Button Content="Ja, Schwarzbild" Style="{StaticResource PrimaryButton}"
+                                Command="{Binding Monitoring.ConfirmBlackscreenRestartCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Momentanwerte -->
+            <UniformGrid Columns="6" Margin="0,4,0,10">
+                <Border Style="{StaticResource Card}" Margin="0,0,8,0" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Monitoring.CpuText}" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="CPU" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,8,0" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Monitoring.RamText}" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Arbeitsspeicher" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,8,0" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Monitoring.GpuTempText}" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="GPU-Temperatur" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,8,0" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Monitoring.GpuLoadText}" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="GPU-Last" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="0,0,8,0" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Monitoring.GpuPowerText}" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="GPU-Leistung" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Monitoring.DisplayCountText}" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Bildschirme" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Verlaeufe -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Verlauf der letzten Minuten" Style="{StaticResource H2}" />
+
+                    <TextBlock Text="GPU-Temperatur (0-100 °C)" Style="{StaticResource Caption}" Margin="0,4,0,4" />
+                    <c:Sparkline Height="60" Values="{Binding Monitoring.GpuTempHistory}"
+                                 Minimum="0" Maximum="100" Stroke="{StaticResource Warn}" />
+
+                    <TextBlock Text="CPU-Auslastung (0-100 %)" Style="{StaticResource Caption}" Margin="0,14,0,4" />
+                    <c:Sparkline Height="60" Values="{Binding Monitoring.CpuHistory}"
+                                 Minimum="0" Maximum="100" Stroke="{StaticResource Accent}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Vorfall melden -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Vorfall melden" Style="{StaticResource H2}" />
+                    <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,10"
+                               Text="Sobald der Bildschirm wieder da ist: kurz beschreiben, was passiert ist, und melden. Der Zeitpunkt wird festgehalten und im Bericht mit den Messwerten davor verknuepft." />
+
+                    <TextBox Text="{Binding Monitoring.Note, UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"
+                             VerticalContentAlignment="Top" />
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Content="Vorfall jetzt melden" Style="{StaticResource PrimaryButton}"
+                                Command="{Binding Monitoring.ReportIncidentCommand}" Margin="0,0,8,0" />
+                        <Button Content="Messwerte als CSV" Style="{StaticResource SecondaryButton}"
+                                Command="{Binding Monitoring.ExportCsvCommand}" Margin="0,0,8,0" />
+                        <Button Content="Sitzungsprotokoll" Style="{StaticResource SecondaryButton}"
+                                Command="{Binding Monitoring.OpenSessionLogCommand}" Margin="0,0,8,0" />
+                        <Button Content="Datenordner" Style="{StaticResource SecondaryButton}"
+                                Command="{Binding Monitoring.OpenDataFolderCommand}" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding Monitoring.Status}" Style="{StaticResource Caption}" Margin="0,10,0,0"
+                               Visibility="{Binding Monitoring.Status, Converter={StaticResource NotEmpty}}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Vorfaelle -->
+            <Grid Margin="0,10,0,6">
+                <TextBlock Text="Aufgezeichnete Vorfaelle" Style="{StaticResource H2}" />
+                <Button Content="Neu laden" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
+                        Command="{Binding Monitoring.RefreshIncidentsCommand}" />
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Monitoring.Incidents}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource Card}" Padding="14,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Style="{StaticResource Chip}" Margin="0,0,10,0">
+                                            <TextBlock Text="{Binding KindText}" FontSize="10.5" FontWeight="Bold" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding TimeText}" Style="{StaticResource Caption}" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding Note}" Style="{StaticResource Muted}" Margin="0,6,0,0"
+                                               Visibility="{Binding Note, Converter={StaticResource NotEmpty}}" />
+                                </StackPanel>
+
+                                <Button Grid.Column="1" Content="Loeschen" Style="{StaticResource GhostButton}"
+                                        VerticalAlignment="Top"
+                                        Command="{Binding DataContext.Monitoring.DeleteIncidentCommand,
+                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Neustart-Verlauf -->
+            <TextBlock Text="Neustart-Protokoll" Style="{StaticResource H2}" Margin="0,16,0,6" />
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{Binding Monitoring.BootSummary}" Style="{StaticResource Muted}" />
+                    <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,12"
+                               Text="Aus dem Windows-Ereignisprotokoll rekonstruiert - unabhaengig davon, ob PC Helper damals schon lief. Bei jedem Herunterfahren schreibt die App zusaetzlich einen Eintrag ins Sitzungsprotokoll." />
+
+                    <!-- Kopfzeile -->
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Windows gestartet" Style="{StaticResource Caption}" />
+                        <TextBlock Grid.Column="1" Text="Sitzungsdauer" Style="{StaticResource Caption}" />
+                        <TextBlock Grid.Column="2" Text="Ende" Style="{StaticResource Caption}" />
+                    </Grid>
+
+                    <ItemsControl ItemsSource="{Binding Monitoring.BootSessions}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="Transparent" Padding="0,5"
+                                        BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0" Text="{Binding StartText}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding DurationText}"
+                                                   Style="{StaticResource Muted}" VerticalAlignment="Center" />
+
+                                        <Border Grid.Column="2" Style="{StaticResource Chip}" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding EndKindText}" FontSize="10.5" FontWeight="Bold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Body}">
+                                                        <Setter Property="FontSize" Value="10.5" />
+                                                        <Setter Property="Foreground" Value="{StaticResource Dim}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsUnexpected}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource Crit}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,43 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Quellcode auschecken
+        uses: actions/checkout@v4
+
+      - name: .NET einrichten
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Erstellen
+        run: dotnet build PCHelper.sln -c Release -warnaserror
+
+      - name: Wissensdatenbank auf gueltiges JSON pruefen
+        shell: pwsh
+        run: |
+          $doc = Get-Content knowledge/known-issues.json -Raw | ConvertFrom-Json
+          if (-not $doc.issues) { throw "known-issues.json enthaelt keine Eintraege." }
+          $ids = $doc.issues | ForEach-Object { $_.id }
+          $dupes = $ids | Group-Object | Where-Object Count -gt 1
+          if ($dupes) { throw "Doppelte IDs: $($dupes.Name -join ', ')" }
+          Write-Host "$($doc.issues.Count) Eintraege, alle IDs eindeutig."
+
+      - name: Kopfloser Selbsttest
+        shell: pwsh
+        run: |
+          $exe = "src\PCHelper\bin\Release\net8.0-windows\PCHelper.exe"
+          $p = Start-Process $exe -ArgumentList "--selftest" -PassThru
+          if (-not $p.WaitForExit(180000)) { Stop-Process -Id $p.Id -Force; throw "Selbsttest lief in eine Zeitueberschreitung." }
+          if ($p.ExitCode -ne 0) { throw "Selbsttest meldete Exitcode $($p.ExitCode)." }
+          Get-Content "$env:LOCALAPPDATA\PCHelper\pchelper.log"
