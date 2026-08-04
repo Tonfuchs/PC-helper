@@ -13,7 +13,10 @@ public enum Severity
     Critical = 3,
 }
 
-/// <summary>Moegliche Ursachenbereiche, auf die Befunde einzahlen.</summary>
+/// <summary>
+/// Moegliche Ursachenbereiche, auf die Befunde einzahlen. Sie sind gleichzeitig
+/// die Themen, ueber die ein Symptom die passenden Pruefungen auswaehlt.
+/// </summary>
 public enum Cause
 {
     GpuDriver,
@@ -26,6 +29,14 @@ public enum Cause
     Software,
     Bios,
     OperatingSystem,
+    AudioDevice,
+    Microphone,
+    AppPermission,
+    Network,
+    Wifi,
+    UsbDevice,
+    DeviceDriver,
+    Cpu,
 }
 
 public static class CauseInfo
@@ -42,6 +53,14 @@ public static class CauseInfo
         Cause.Software => "Software / Treiber von Drittanbietern",
         Cause.Bios => "BIOS / Mainboard",
         Cause.OperatingSystem => "Windows / Systemdateien",
+        Cause.AudioDevice => "Tonausgabe / Audiogeraete",
+        Cause.Microphone => "Mikrofon / Aufnahmegeraete",
+        Cause.AppPermission => "Windows-Berechtigungen (Datenschutz)",
+        Cause.Network => "Netzwerk / Internetverbindung",
+        Cause.Wifi => "WLAN / Funkverbindung",
+        Cause.UsbDevice => "USB-Anschluesse und -Geraete",
+        Cause.DeviceDriver => "Geraetetreiber (Geraete-Manager)",
+        Cause.Cpu => "Prozessorlast / Systemleistung",
         _ => c.ToString()
     };
 
@@ -57,6 +76,14 @@ public static class CauseInfo
         Cause.Software => "Overlays, Tuning- und RGB-Software greifen tief ins System ein.",
         Cause.Bios => "Veraltete Firmware verursacht Probleme mit Speicher und PCIe-Anbindung.",
         Cause.OperatingSystem => "Beschaedigte Systemdateien oder ein fehlerhaftes Update.",
+        Cause.AudioDevice => "Ein Wiedergabegeraet ist deaktiviert, nicht angeschlossen oder nicht als Standard gesetzt.",
+        Cause.Microphone => "Das Aufnahmegeraet ist deaktiviert, abgesteckt oder von einer anderen Anwendung belegt.",
+        Cause.AppPermission => "Windows erlaubt der Anwendung den Zugriff auf Mikrofon oder Kamera nicht. Das Geraet ist da - die App darf nur nicht ran.",
+        Cause.Network => "Adapter, Treiber, DHCP oder DNS liefern keine brauchbare Verbindung.",
+        Cause.Wifi => "Die Funkstrecke ist gestoert oder der WLAN-Adapter wird schlafen gelegt.",
+        Cause.UsbDevice => "Der Anschluss liefert zu wenig Strom, wird abgeschaltet oder das Geraet meldet sich nicht sauber an.",
+        Cause.DeviceDriver => "Ein Geraet meldet im Geraete-Manager einen Fehlercode - Treiber fehlt, ist deaktiviert oder startet nicht.",
+        Cause.Cpu => "Dauerlast, Drosselung oder ein Hintergrundprozess bremsen das gesamte System aus.",
         _ => ""
     };
 }
@@ -99,6 +126,29 @@ public sealed class Finding
 
     /// <summary>Zeitpunkt des juengsten zugehoerigen Ereignisses.</summary>
     public DateTime? LastOccurrence { get; init; }
+
+    /// <summary>
+    /// Symptome, auf die dieser Befund unmittelbar antwortet (IDs aus dem
+    /// <see cref="SymptomCatalog"/>). Solche Befunde stehen bei einer gezielten
+    /// Untersuchung immer ganz oben.
+    /// </summary>
+    public IReadOnlyList<string> SymptomIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Wie gut passt dieser Befund zum gewaehlten Symptom? Grundlage der
+    /// Sortierung bei einer gezielten Untersuchung.
+    /// </summary>
+    public double RelevanceFor(Symptom? symptom)
+    {
+        if (symptom is null) return 0;
+
+        double score = SymptomIds.Contains(symptom.Id) ? 2.0 : 0;
+        foreach (var (cause, weight) in Causes)
+            if (symptom.Causes.TryGetValue(cause, out var prior))
+                score += weight * prior;
+
+        return Math.Round(score, 3);
+    }
 
     public string SeverityText => Severity switch
     {

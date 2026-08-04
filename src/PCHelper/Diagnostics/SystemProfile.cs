@@ -67,6 +67,143 @@ public sealed class VolumeInfo
 }
 
 /// <summary>
+/// Ein Wiedergabe- oder Aufnahmegeraet, so wie Windows es fuehrt - ausdruecklich
+/// inklusive der deaktivierten und abgesteckten Geraete, denn genau die fehlen
+/// in den Sound-Einstellungen und werden dadurch uebersehen.
+/// </summary>
+public sealed class AudioEndpoint
+{
+    public string Name { get; init; } = "";
+    public bool IsCapture { get; init; }
+
+    /// <summary>Rohwert aus der Registrierung (1 aktiv, 2 deaktiviert, 4 nicht vorhanden, 8 nicht angeschlossen).</summary>
+    public int StateCode { get; init; }
+
+    public bool IsActive => StateCode == 1;
+    public bool IsDisabled => StateCode == 2;
+    public bool IsUnplugged => StateCode == 8;
+
+    public string StateText => StateCode switch
+    {
+        1 => "aktiv",
+        2 => "deaktiviert",
+        4 => "nicht vorhanden",
+        8 => "nicht angeschlossen",
+        _ => "unbekannt (" + StateCode + ")",
+    };
+
+    public string KindText => IsCapture ? "Aufnahme" : "Wiedergabe";
+
+    public override string ToString() => $"{Name} [{KindText}: {StateText}]";
+}
+
+/// <summary>Ein Netzwerkadapter samt IP-Konfiguration.</summary>
+public sealed class NetAdapter
+{
+    public string Name { get; init; } = "";
+    public string ConnectionName { get; init; } = "";
+    public bool Enabled { get; init; }
+    public int ConnectionStatus { get; init; }
+    public string MacAddress { get; init; } = "";
+    public long SpeedBitsPerSecond { get; init; }
+    public List<string> IpAddresses { get; } = new();
+    public List<string> DnsServers { get; } = new();
+    public string Gateway { get; init; } = "";
+    public bool DhcpEnabled { get; init; }
+
+    public bool IsWireless =>
+        Name.Contains("Wireless", StringComparison.OrdinalIgnoreCase) ||
+        Name.Contains("Wi-Fi", StringComparison.OrdinalIgnoreCase) ||
+        Name.Contains("WLAN", StringComparison.OrdinalIgnoreCase) ||
+        Name.Contains("802.11", StringComparison.OrdinalIgnoreCase) ||
+        ConnectionName.Contains("WLAN", StringComparison.OrdinalIgnoreCase) ||
+        ConnectionName.Contains("Wi-Fi", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsConnected => ConnectionStatus == 2;
+
+    /// <summary>Adresse aus dem 169.254er-Bereich: DHCP hat keine Antwort bekommen.</summary>
+    public bool HasApipaAddress => IpAddresses.Any(ip => ip.StartsWith("169.254.", StringComparison.Ordinal));
+
+    public bool HasUsableIpv4 => IpAddresses.Any(ip =>
+        ip.Contains('.') && !ip.StartsWith("169.254.", StringComparison.Ordinal) && ip != "0.0.0.0");
+
+    public string SpeedText => SpeedBitsPerSecond <= 0
+        ? "unbekannt"
+        : SpeedBitsPerSecond >= 1_000_000_000
+            ? $"{SpeedBitsPerSecond / 1_000_000_000.0:0.#} Gbit/s"
+            : $"{SpeedBitsPerSecond / 1_000_000.0:0} Mbit/s";
+
+    public string StatusText => ConnectionStatus switch
+    {
+        0 => "getrennt",
+        1 => "verbindet",
+        2 => "verbunden",
+        3 => "trennt",
+        4 => "Hardware nicht vorhanden",
+        5 => "Hardware deaktiviert",
+        6 => "Hardwarefehler",
+        7 => "Medium getrennt (Kabel steckt nicht)",
+        _ => "unbekannt",
+    };
+}
+
+/// <summary>Ein Geraet, dem Windows im Geraete-Manager einen Fehlercode zugewiesen hat.</summary>
+public sealed class ProblemDevice
+{
+    public string Name { get; init; } = "";
+    public string DeviceClass { get; init; } = "";
+    public string DeviceId { get; init; } = "";
+    public int ErrorCode { get; init; }
+
+    /// <summary>Klartext zum Fehlercode - die Codes sind seit Jahrzehnten stabil dokumentiert.</summary>
+    public string ErrorText => ErrorCode switch
+    {
+        1 => "Das Geraet ist nicht richtig konfiguriert (kein passender Treiber).",
+        3 => "Der Treiber ist beschaedigt oder es fehlt Arbeitsspeicher.",
+        10 => "Das Geraet kann nicht gestartet werden - meist Treiber oder Firmware.",
+        12 => "Es sind nicht genuegend freie Ressourcen vorhanden.",
+        14 => "Das Geraet arbeitet erst nach einem Neustart richtig.",
+        18 => "Die Treiber muessen neu installiert werden.",
+        19 => "Die Registrierungseintraege des Geraets sind beschaedigt.",
+        21 => "Windows entfernt das Geraet gerade.",
+        22 => "Das Geraet ist deaktiviert.",
+        24 => "Das Geraet ist nicht vorhanden oder nicht richtig angeschlossen.",
+        28 => "Fuer dieses Geraet ist kein Treiber installiert.",
+        31 => "Windows kann keine Treiber laden, die dieses Geraet benoetigt.",
+        32 => "Der Starttyp des Treibers ist deaktiviert.",
+        37 => "Der Treiber konnte nicht initialisiert werden.",
+        38 => "Eine frueher geladene Treiberinstanz blockiert noch - ein Neustart hilft.",
+        39 => "Der Treiber ist beschaedigt oder fehlt.",
+        43 => "Windows hat das Geraet gestoppt, weil es Fehler gemeldet hat.",
+        45 => "Das Geraet ist derzeit nicht angeschlossen (Eintrag stammt aus einer frueheren Verbindung).",
+        _ => "Windows meldet Fehlercode " + ErrorCode + ".",
+    };
+}
+
+/// <summary>Zugriffsrechte einer Geraeteklasse (Mikrofon, Kamera) laut Windows-Datenschutz.</summary>
+public sealed class PrivacyConsent
+{
+    public required string Kind { get; init; }
+
+    /// <summary>Globale Einstellung des angemeldeten Benutzers ("Allow"/"Deny"/null).</summary>
+    public string? UserValue { get; init; }
+
+    /// <summary>Einstellung fuer klassische Desktop-Programme (der oft uebersehene Schalter).</summary>
+    public string? DesktopAppsValue { get; init; }
+
+    /// <summary>Per Gruppenrichtlinie gesetzte Sperre, falls vorhanden.</summary>
+    public string? PolicyValue { get; init; }
+
+    /// <summary>Namen der Anwendungen, denen der Zugriff ausdruecklich verweigert wurde.</summary>
+    public List<string> DeniedApps { get; } = new();
+
+    public bool GloballyBlocked => string.Equals(UserValue, "Deny", StringComparison.OrdinalIgnoreCase);
+    public bool DesktopAppsBlocked => string.Equals(DesktopAppsValue, "Deny", StringComparison.OrdinalIgnoreCase);
+    public bool PolicyBlocked => string.Equals(PolicyValue, "Deny", StringComparison.OrdinalIgnoreCase);
+    public bool AnyBlock => GloballyBlocked || DesktopAppsBlocked || PolicyBlocked || DeniedApps.Count > 0;
+}
+
+/// <summary>
 /// Einmalig erhobene Bestandsaufnahme des Systems. Alle Pruefungen arbeiten
 /// auf diesem Objekt, damit WMI nicht mehrfach abgefragt wird.
 /// </summary>
@@ -116,6 +253,22 @@ public sealed class SystemProfile
     public uint? UsbSelectiveSuspend { get; private set; }
     public uint? ProcessorMinState { get; private set; }
 
+    // Ton
+    public List<AudioEndpoint> AudioEndpoints { get; } = new();
+
+    // Netzwerk
+    public List<NetAdapter> NetworkAdapters { get; } = new();
+
+    // Geraete-Manager
+    public List<ProblemDevice> ProblemDevices { get; } = new();
+
+    // Dienste, die fuer Ton, Netzwerk und Geraete zustaendig sind
+    public Dictionary<string, (string State, string StartMode)> Services { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    // Windows-Datenschutz
+    public PrivacyConsent? MicrophoneConsent { get; private set; }
+    public PrivacyConsent? CameraConsent { get; private set; }
+
     // Software
     public HashSet<string> RunningProcesses { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> StartupEntries { get; } = new();
@@ -158,6 +311,11 @@ public sealed class SystemProfile
             p.CollectPower();
             p.CollectSoftware();
             p.CollectRegistry();
+            p.CollectAudioEndpoints();
+            p.CollectNetwork();
+            p.CollectProblemDevices();
+            p.CollectServices();
+            p.CollectPrivacy();
         }, ct);
 
         p.Displays = DisplayConfig.GetActiveTargets();
@@ -377,6 +535,238 @@ public sealed class SystemProfile
             if (key.GetValue("TdrLevel") is int l) TdrLevel = l;
         }
         catch { /* Standardwerte gelten, wenn die Werte fehlen */ }
+    }
+
+    /// <summary>
+    /// Liest die Audiogeraete direkt aus der Registrierung statt ueber die
+    /// Sound-Einstellungen. Nur dort stehen auch die deaktivierten und
+    /// abgesteckten Geraete - und genau die sind bei "Mikrofon wird nicht
+    /// erkannt" der haeufigste Treffer.
+    /// </summary>
+    private void CollectAudioEndpoints()
+    {
+        const string root = @"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio";
+
+        foreach (var (branch, isCapture) in new[] { ("Render", false), ("Capture", true) })
+        {
+            try
+            {
+                using var key = Registry.LocalMachine.OpenSubKey($@"{root}\{branch}");
+                if (key is null) continue;
+
+                foreach (var id in key.GetSubKeyNames())
+                {
+                    try
+                    {
+                        using var device = key.OpenSubKey(id);
+                        if (device is null) continue;
+
+                        var state = device.GetValue("DeviceState") as int? ?? 0;
+                        var name = ReadEndpointName(device) ?? id;
+
+                        AudioEndpoints.Add(new AudioEndpoint { Name = name, IsCapture = isCapture, StateCode = state });
+                    }
+                    catch { /* einzelnes Geraet nicht lesbar -> ueberspringen */ }
+                }
+            }
+            catch (Exception ex) { Log.Warn($"Audiogeraete ({branch}): {ex.Message}"); }
+        }
+    }
+
+    /// <summary>Anzeigename eines Audiogeraets aus den Property-Keys der Registrierung.</summary>
+    private static string? ReadEndpointName(RegistryKey device)
+    {
+        using var props = device.OpenSubKey("Properties");
+        if (props is null) return null;
+
+        // Reihenfolge: vollstaendiger Anzeigename, Geraetebeschreibung, Schnittstellenname.
+        foreach (var value in new[]
+                 {
+                     "{a45c254e-df1c-4efd-8020-67d146a850e0},14",
+                     "{a45c254e-df1c-4efd-8020-67d146a850e0},2",
+                     "{b3f8fa53-0004-438e-9003-51a46e139bfc},6",
+                 })
+        {
+            if (props.GetValue(value) is string s && !string.IsNullOrWhiteSpace(s)) return s.Trim();
+        }
+        return null;
+    }
+
+    private void CollectNetwork()
+    {
+        var configs = Wmi.Query(
+            "SELECT InterfaceIndex, IPAddress, DefaultIPGateway, DNSServerSearchOrder, DHCPEnabled, IPEnabled " +
+            "FROM Win32_NetworkAdapterConfiguration");
+
+        foreach (var row in Wmi.Query(
+            "SELECT Name, NetConnectionID, NetConnectionStatus, NetEnabled, MACAddress, Speed, InterfaceIndex " +
+            "FROM Win32_NetworkAdapter WHERE PhysicalAdapter = TRUE"))
+        {
+            var name = row.Str("Name");
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            var index = row.Int("InterfaceIndex");
+            var config = configs.FirstOrDefault(c => c.Int("InterfaceIndex") == index);
+
+            var adapter = new NetAdapter
+            {
+                Name = name,
+                ConnectionName = row.Str("NetConnectionID"),
+                Enabled = row.Bool("NetEnabled") ?? false,
+                ConnectionStatus = row.Int("NetConnectionStatus") ?? -1,
+                MacAddress = row.Str("MACAddress"),
+                SpeedBitsPerSecond = row.Long("Speed") ?? 0,
+                Gateway = config is null ? "" : string.Join(", ", StringArray(config, "DefaultIPGateway")),
+                DhcpEnabled = config?.Bool("DHCPEnabled") ?? false,
+            };
+
+            if (config is not null)
+            {
+                adapter.IpAddresses.AddRange(StringArray(config, "IPAddress"));
+                adapter.DnsServers.AddRange(StringArray(config, "DNSServerSearchOrder"));
+            }
+
+            NetworkAdapters.Add(adapter);
+        }
+    }
+
+    private static IEnumerable<string> StringArray(Dictionary<string, object?> row, string key)
+    {
+        if (!row.TryGetValue(key, out var value) || value is not string[] array) return Array.Empty<string>();
+        return array.Where(s => !string.IsNullOrWhiteSpace(s));
+    }
+
+    private void CollectProblemDevices()
+    {
+        foreach (var row in Wmi.Query(
+            "SELECT Name, PNPClass, DeviceID, ConfigManagerErrorCode FROM Win32_PnPEntity " +
+            "WHERE ConfigManagerErrorCode <> 0"))
+        {
+            var code = row.Int("ConfigManagerErrorCode") ?? 0;
+            if (code == 0) continue;
+
+            ProblemDevices.Add(new ProblemDevice
+            {
+                Name = row.Str("Name"),
+                DeviceClass = row.Str("PNPClass"),
+                DeviceId = row.Str("DeviceID"),
+                ErrorCode = code,
+            });
+        }
+    }
+
+    /// <summary>Dienste, ohne die Ton, Netzwerk oder Geraeteerkennung nicht funktionieren.</summary>
+    internal static readonly (string Name, string Purpose)[] WatchedServices =
+    {
+        ("Audiosrv", "Windows-Audio"),
+        ("AudioEndpointBuilder", "Audio-Geraeteverwaltung"),
+        ("Dhcp", "DHCP-Client (IP-Adresse beziehen)"),
+        ("Dnscache", "DNS-Client (Namensaufloesung)"),
+        ("WlanSvc", "WLAN-Dienst"),
+        ("nlasvc", "Netzwerkstandort-Erkennung"),
+        ("NlaSvc", "Netzwerkstandort-Erkennung"),
+        ("PlugPlay", "Geraeteerkennung"),
+        ("DeviceAssociationService", "Geraetekopplung"),
+        ("FrameServer", "Kamera-Bildverarbeitung"),
+    };
+
+    private void CollectServices()
+    {
+        var names = WatchedServices.Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase);
+        var filter = string.Join(" OR ", names.Select(n => $"Name='{n}'"));
+
+        foreach (var row in Wmi.Query($"SELECT Name, State, StartMode FROM Win32_Service WHERE {filter}"))
+        {
+            var name = row.Str("Name");
+            if (!string.IsNullOrWhiteSpace(name))
+                Services[name] = (row.Str("State"), row.Str("StartMode"));
+        }
+    }
+
+    private void CollectPrivacy()
+    {
+        MicrophoneConsent = ReadConsent("microphone", "Mikrofon");
+        CameraConsent = ReadConsent("webcam", "Kamera");
+    }
+
+    /// <summary>
+    /// Liest den Windows-Datenschutz fuer eine Geraeteklasse. Der Schalter
+    /// "Desktop-Apps duerfen zugreifen" liegt im Unterschluessel "NonPackaged" -
+    /// er ist der Grund, warum ein Mikrofon in Discord fehlt, in den
+    /// Windows-Einstellungen aber einwandfrei aussieht.
+    /// </summary>
+    private static PrivacyConsent? ReadConsent(string capability, string label)
+    {
+        const string consentRoot = @"SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
+        const string policyRoot = @"SOFTWARE\Policies\Microsoft\Windows\AppPrivacy";
+
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey($@"{consentRoot}\{capability}");
+            if (key is null) return null;
+
+            string? desktop = null;
+            using (var nonPackaged = key.OpenSubKey("NonPackaged"))
+                desktop = nonPackaged?.GetValue("Value") as string;
+
+            string? policy = null;
+            try
+            {
+                using var pol = Registry.LocalMachine.OpenSubKey(policyRoot);
+                var name = capability == "webcam" ? "LetAppsAccessCamera" : "LetAppsAccessMicrophone";
+                // 0 = Benutzer entscheidet, 1 = erzwungen erlaubt, 2 = erzwungen verweigert
+                if (pol?.GetValue(name) is int v) policy = v == 2 ? "Deny" : v == 1 ? "Allow" : null;
+            }
+            catch { /* keine Richtlinie gesetzt */ }
+
+            var consent = new PrivacyConsent
+            {
+                Kind = label,
+                UserValue = key.GetValue("Value") as string,
+                DesktopAppsValue = desktop,
+                PolicyValue = policy,
+            };
+
+            // Einzelne Anwendungen, denen der Zugriff verweigert wurde.
+            CollectDeniedApps(key, consent.DeniedApps);
+            using (var nonPackaged = key.OpenSubKey("NonPackaged"))
+                if (nonPackaged is not null) CollectDeniedApps(nonPackaged, consent.DeniedApps);
+
+            return consent;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Datenschutzeinstellungen ({capability}): {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Sammelt alle Anwendungen unterhalb eines Zustimmungsschluessels, die auf "Deny" stehen.</summary>
+    private static void CollectDeniedApps(RegistryKey root, List<string> target)
+    {
+        foreach (var appKeyName in root.GetSubKeyNames())
+        {
+            if (appKeyName.Equals("NonPackaged", StringComparison.OrdinalIgnoreCase)) continue;
+            try
+            {
+                using var appKey = root.OpenSubKey(appKeyName);
+                if (appKey?.GetValue("Value") as string == "Deny")
+                    target.Add(FriendlyAppName(appKeyName));
+            }
+            catch { /* einzelner Eintrag nicht lesbar */ }
+        }
+    }
+
+    /// <summary>
+    /// Desktop-Programme stehen mit ihrem Pfad im Schluessel, wobei "#" als
+    /// Trennzeichen dient (C:#Program Files#Discord#Discord.exe).
+    /// </summary>
+    private static string FriendlyAppName(string keyName)
+    {
+        if (!keyName.Contains('#')) return keyName;
+        var path = keyName.Replace('#', '\\');
+        try { return $"{Path.GetFileName(path)} ({path})"; }
+        catch { return path; }
     }
 
     /// <summary>Kurzfassung fuer Kopfzeilen und Berichte.</summary>

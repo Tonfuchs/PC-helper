@@ -8,6 +8,7 @@ public sealed class MemoryConfigCheck : ICheck
 {
     public string Name => "Arbeitsspeicher-Konfiguration";
     public string Category => "Arbeitsspeicher";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.Memory, Cause.Bios };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -105,6 +106,7 @@ public sealed class MemoryDiagnosticsCheck : ICheck
 {
     public string Name => "Speicherdiagnose";
     public string Category => "Arbeitsspeicher";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.Memory };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -163,6 +165,8 @@ public sealed class FastStartupCheck : ICheck
 {
     public string Name => "Windows-Schnellstart";
     public string Category => "Energie";
+    public IReadOnlyList<Cause> Topics { get; } =
+        new[] { Cause.PowerSettings, Cause.GpuDriver, Cause.DeviceDriver, Cause.Network };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -203,6 +207,8 @@ public sealed class PowerSettingsCheck : ICheck
 {
     public string Name => "Energieeinstellungen";
     public string Category => "Energie";
+    public IReadOnlyList<Cause> Topics { get; } =
+        new[] { Cause.PowerSettings, Cause.DisplayLink, Cause.GpuDriver, Cause.UsbDevice, Cause.Cpu };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {

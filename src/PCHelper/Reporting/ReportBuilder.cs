@@ -43,6 +43,17 @@ public static class ReportBuilder
         sb.AppendLine($"<p class=\"sub\">Erstellt am {DateTime.Now:dddd, d. MMMM yyyy 'um' HH:mm} &middot; {AppInfo.Name} {AppInfo.VersionDisplay} &middot; Dauer {result.Duration.TotalSeconds:0.#} s</p>");
         sb.AppendLine("</header>");
 
+        // --- Gemeldetes Symptom ---
+        if (result.Symptom is { } symptom)
+        {
+            sb.AppendLine("<div class=\"card\">");
+            sb.AppendLine($"<h2>Gemeldetes Problem</h2><p><strong>{E(symptom.Title)}</strong></p>");
+            sb.AppendLine($"<p class=\"muted\">{E(symptom.Description)}</p>");
+            sb.AppendLine($"<p class=\"muted small\">Gezielte Untersuchung: {result.ChecksRun} Pruefungen. " +
+                          "Die Befunde stehen nach ihrer Bedeutung fuer dieses Problem.</p>");
+            sb.AppendLine("</div>");
+        }
+
         // --- Kennzahlen ---
         sb.AppendLine("<div class=\"tiles\">");
         sb.AppendLine(Tile("Kritisch", result.CriticalCount.ToString(), "crit"));
@@ -206,6 +217,13 @@ public static class ReportBuilder
         sb.AppendLine();
         sb.AppendLine($"*Erstellt am {DateTime.Now:dd.MM.yyyy HH:mm} mit {AppInfo.Name} {AppInfo.VersionDisplay}*");
         sb.AppendLine();
+
+        if (result.Symptom is { } symptom)
+        {
+            sb.AppendLine($"**Gemeldetes Problem:** {symptom.Title}");
+            sb.AppendLine();
+        }
+
         sb.AppendLine("### System");
         sb.AppendLine($"- **CPU:** {p.CpuName}");
         sb.AppendLine($"- **Mainboard:** {p.BoardManufacturer} {p.BoardProduct}, BIOS {p.BiosVersion} ({p.FormatBiosAge()})");

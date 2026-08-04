@@ -79,7 +79,17 @@ public static class Shell
     /// Fuehrt mehrere Kommandozeilen gebuendelt als Batchdatei mit Adminrechten aus (eine UAC-Abfrage).
     /// Liefert die Protokollausgabe der Batchdatei zurueck.
     /// </summary>
-    public static async Task<ProcessResult> RunElevatedBatchAsync(IEnumerable<string> commands, string label)
+    public static Task<ProcessResult> RunElevatedBatchAsync(IEnumerable<string> commands, string label)
+        => RunBatchAsync(commands, label, elevated: true);
+
+    /// <summary>
+    /// Wie <see cref="RunElevatedBatchAsync"/>, aber wahlweise ohne Elevation.
+    /// Aenderungen am Benutzerzweig der Registrierung (HKCU) muessen ohne
+    /// Adminrechte laufen: Bei einer Elevation mit einem anderen Konto wuerde
+    /// sonst dessen Benutzerzweig geaendert - und beim angemeldeten Benutzer
+    /// bliebe alles beim Alten.
+    /// </summary>
+    public static async Task<ProcessResult> RunBatchAsync(IEnumerable<string> commands, string label, bool elevated)
     {
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
         var dir = Path.Combine(AppInfo.DataDir, "fixes");
@@ -108,8 +118,8 @@ public static class Shell
         {
             var psi = new ProcessStartInfo("cmd.exe", $"/c \"\"{cmdPath}\" > \"{logPath}\" 2>&1\"")
             {
-                UseShellExecute = true,   // fuer Verb=runas zwingend
-                Verb = "runas",
+                UseShellExecute = elevated,   // fuer Verb=runas zwingend
+                Verb = elevated ? "runas" : "",
                 CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
             };

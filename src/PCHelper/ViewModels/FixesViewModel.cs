@@ -64,7 +64,10 @@ public sealed class FixesViewModel : ObservableObject
         var action = revert ? "zurueckgenommen" : "angewendet";
         var confirm = MessageBox.Show(
             $"{item.Title}\n\n{(revert ? item.Fix.RevertPreview : item.Fix.CommandPreview)}\n\n" +
-            $"Diese Befehle werden als Administrator ausgefuehrt. Fortfahren?" +
+            (item.Fix.RequiresAdmin
+                ? "Diese Befehle werden als Administrator ausgefuehrt. Fortfahren?"
+                : "Diese Befehle aendern nur Einstellungen des angemeldeten Benutzers und laufen " +
+                  "ohne Administratorrechte. Fortfahren?") +
             (item.NeedsReboot ? "\n\nDie Aenderung wirkt erst nach einem Neustart." : ""),
             $"Reparatur {(revert ? "zuruecknehmen" : "anwenden")}",
             MessageBoxButton.OKCancel, MessageBoxImage.Question);
@@ -76,7 +79,9 @@ public sealed class FixesViewModel : ObservableObject
 
         try
         {
-            if (CreateRestorePoint && !_restorePointDone && !revert)
+            // Fuer reine Benutzereinstellungen ist ein Wiederherstellungspunkt unangemessen:
+            // er wuerde eine UAC-Abfrage ausloesen, obwohl die Aenderung gar keine braucht.
+            if (CreateRestorePoint && !_restorePointDone && !revert && item.Fix.RequiresAdmin)
             {
                 Status = "Wiederherstellungspunkt wird angelegt (das kann eine Minute dauern) ...";
                 var rp = await FixRunner.CreateRestorePointAsync();

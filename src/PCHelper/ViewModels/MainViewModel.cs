@@ -29,6 +29,7 @@ public sealed class MainViewModel : ObservableObject
         Monitoring = new MonitorViewModel(monitor, incidents, settings);
         Fixes = new FixesViewModel();
         Tools = new ToolsViewModel();
+        Symptoms = new SymptomViewModel(Diagnose, Tools, page => CurrentPage = page);
 
         NavigateCommand = new RelayCommand(p => CurrentPage = p as string ?? "dashboard");
         CheckUpdateCommand = new RelayCommand(_ => CheckForUpdateAsync(silent: false));
@@ -48,6 +49,7 @@ public sealed class MainViewModel : ObservableObject
     public MonitorViewModel Monitoring { get; }
     public FixesViewModel Fixes { get; }
     public ToolsViewModel Tools { get; }
+    public SymptomViewModel Symptoms { get; }
 
     public RelayCommand NavigateCommand { get; }
     public RelayCommand CheckUpdateCommand { get; }
@@ -67,6 +69,7 @@ public sealed class MainViewModel : ObservableObject
         {
             if (!Set(ref _currentPage, value)) return;
             Raise(nameof(IsDashboard));
+            Raise(nameof(IsSymptom));
             Raise(nameof(IsDiagnose));
             Raise(nameof(IsMonitor));
             Raise(nameof(IsFixes));
@@ -78,6 +81,7 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public bool IsDashboard => CurrentPage == "dashboard";
+    public bool IsSymptom => CurrentPage == "symptom";
     public bool IsDiagnose => CurrentPage == "diagnose";
     public bool IsMonitor => CurrentPage == "monitor";
     public bool IsFixes => CurrentPage == "fixes";
@@ -86,6 +90,7 @@ public sealed class MainViewModel : ObservableObject
 
     public string PageTitle => CurrentPage switch
     {
+        "symptom" => "Problem melden",
         "diagnose" => "Diagnose",
         "monitor" => "Dauerueberwachung",
         "fixes" => "Reparaturen",
@@ -96,7 +101,8 @@ public sealed class MainViewModel : ObservableObject
 
     public string PageSubtitle => CurrentPage switch
     {
-        "diagnose" => "Vollstaendige Pruefung von Hardware, Treibern und Ereignisprotokoll",
+        "symptom" => "Beschreiben, was nicht funktioniert - der Rest ergibt sich daraus",
+        "diagnose" => "Pruefung von Hardware, Treibern, Ton, Netzwerk, Geraeten und Ereignisprotokoll",
         "monitor" => "Zeichnet fortlaufend auf, was kurz vor einem Ausfall passiert",
         "fixes" => "Nachvollziehbare Systemaenderungen, jederzeit umkehrbar",
         "tools" => "Bordmittel von Windows und bewaehrte Zusatzprogramme",

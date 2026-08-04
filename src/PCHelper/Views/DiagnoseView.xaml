@@ -4,6 +4,19 @@
 
     <DockPanel>
 
+        <!-- Hinweis auf die gezielte Untersuchung -->
+        <Border DockPanel.Dock="Top" Margin="28,16,28,0" Padding="16,12"
+                Background="{StaticResource AccentSoft}" CornerRadius="10"
+                Visibility="{Binding Diagnose.HasSymptom, Converter={StaticResource BoolVis}}">
+            <StackPanel>
+                <TextBlock Text="Gezielte Untersuchung" FontWeight="SemiBold" FontSize="12"
+                           Foreground="{StaticResource Accent}" />
+                <TextBlock Text="{Binding Diagnose.SymptomTitle}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,0" TextWrapping="Wrap"
+                           Text="Die Befunde stehen nach ihrer Bedeutung fuer genau dieses Problem - nicht nach Schweregrad. Mit 'Alles pruefen' laeuft stattdessen der vollstaendige Rundumlauf." />
+            </StackPanel>
+        </Border>
+
         <!-- Aktionsleiste -->
         <Border DockPanel.Dock="Top" Margin="28,16,28,0" Style="{StaticResource Card}" Padding="16,14">
             <StackPanel>
@@ -27,7 +40,8 @@
                                 Command="{Binding Diagnose.ExportHtmlCommand}" />
                         <Button Content="Kurzfassung kopieren" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
                                 Command="{Binding Diagnose.CopyMarkdownCommand}" />
-                        <Button Content="Diagnose starten" Style="{StaticResource PrimaryButton}"
+                        <Button Content="Alles pruefen" Style="{StaticResource PrimaryButton}"
+                                ToolTip="Vollstaendiger Rundumlauf: Anzeige, Ton, Netzwerk, Geraete, Speicher, Stabilitaet."
                                 Command="{Binding Diagnose.RunCommand}" />
                     </StackPanel>
                 </Grid>

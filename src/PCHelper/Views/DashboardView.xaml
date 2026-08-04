@@ -5,6 +5,26 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="28,20,20,28">
         <StackPanel MaxWidth="900" HorizontalAlignment="Left">
 
+            <!-- Einstieg ueber das Symptom -->
+            <Border Style="{StaticResource Card}" Padding="20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                        <TextBlock Text="Was funktioniert nicht?" Style="{StaticResource H2}" />
+                        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                   Text="Problem in eigenen Worten beschreiben - Mikrofon, Ton, Internet, Bildschirm, Abstuerze, Geraete, Tempo. PC Helper sucht den passenden Fall heraus und untersucht gezielt in diese Richtung." />
+                    </StackPanel>
+
+                    <Button Grid.Column="1" Content="Problem melden" Style="{StaticResource PrimaryButton}"
+                            Padding="22,12" FontSize="14" VerticalAlignment="Center"
+                            Command="{Binding NavigateCommand}" CommandParameter="symptom" />
+                </Grid>
+            </Border>
+
             <!-- Start -->
             <Border Style="{StaticResource Card}" Padding="20">
                 <Grid>
@@ -14,7 +34,7 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                        <TextBlock Text="Vollstaendige Pruefung starten" Style="{StaticResource H2}" />
+                        <TextBlock Text="Oder gleich alles pruefen" Style="{StaticResource H2}" />
                         <TextBlock Style="{StaticResource Muted}"
                                    Text="{Binding Diagnose.SummaryText}" />
                         <ProgressBar Value="{Binding Diagnose.ProgressValue, Mode=OneWay}" Maximum="100" Margin="0,12,0,6"

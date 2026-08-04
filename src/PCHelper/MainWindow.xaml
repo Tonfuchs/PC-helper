@@ -22,7 +22,7 @@
 
                 <StackPanel DockPanel.Dock="Top" Margin="20,22,20,18">
                     <TextBlock Text="PC Helper" Style="{StaticResource H1}" FontSize="20" />
-                    <TextBlock Text="Diagnose fuer sporadische Probleme" Style="{StaticResource Caption}" Margin="0,2,0,0" />
+                    <TextBlock Text="Diagnose fuer Windows-Probleme aller Art" Style="{StaticResource Caption}" Margin="0,2,0,0" />
                 </StackPanel>
 
                 <!-- Statusleiste unten -->
@@ -55,6 +55,9 @@
                     <RadioButton Style="{StaticResource NavButton}" Tag="&#xE80F;" Content="Uebersicht"
                                  GroupName="nav" IsChecked="{Binding IsDashboard, Mode=OneWay}"
                                  Command="{Binding NavigateCommand}" CommandParameter="dashboard" />
+                    <RadioButton Style="{StaticResource NavButton}" Tag="&#xE897;" Content="Problem melden"
+                                 GroupName="nav" IsChecked="{Binding IsSymptom, Mode=OneWay}"
+                                 Command="{Binding NavigateCommand}" CommandParameter="symptom" />
                     <RadioButton Style="{StaticResource NavButton}" Tag="&#xE9D9;" Content="Diagnose"
                                  GroupName="nav" IsChecked="{Binding IsDiagnose, Mode=OneWay}"
                                  Command="{Binding NavigateCommand}" CommandParameter="diagnose" />
@@ -118,6 +121,7 @@
             <!-- Seiten -->
             <Grid>
                 <v:DashboardView Visibility="{Binding IsDashboard, Converter={StaticResource BoolVis}}" />
+                <v:SymptomView   Visibility="{Binding IsSymptom,   Converter={StaticResource BoolVis}}" />
                 <v:DiagnoseView  Visibility="{Binding IsDiagnose,  Converter={StaticResource BoolVis}}" />
                 <v:MonitorView   Visibility="{Binding IsMonitor,   Converter={StaticResource BoolVis}}" />
                 <v:FixesView     Visibility="{Binding IsFixes,     Converter={StaticResource BoolVis}}" />

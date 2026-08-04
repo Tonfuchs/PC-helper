@@ -66,6 +66,16 @@ public sealed class NotNullToVisibilityConverter : IValueConverter
         => Binding.DoNothing;
 }
 
+/// <summary>Zeigt ein Element nur, wenn eine Anzahl groesser als null ist.</summary>
+public sealed class CountToVisibilityConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is int count && count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => Binding.DoNothing;
+}
+
 /// <summary>Kehrt einen Wahrheitswert um und liefert eine Sichtbarkeit.</summary>
 public sealed class InverseBoolToVisibilityConverter : IValueConverter
 {

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-08-01",
-  "note": "Wissensdatenbank fuer PC Helper. Wird von der App beim Start aus dem GitHub-Repo nachgeladen (raw), sonst wird die eingebettete Kopie benutzt. Neue Eintraege hier ergaenzen wirken SOFORT bei allen Nutzern - ohne App-Update.",
+  "updated": "2026-08-04",
+  "note": "Wissensdatenbank fuer PC Helper. Wird von der App beim Start aus dem GitHub-Repo nachgeladen (raw), sonst wird die eingebettete Kopie benutzt. Neue Eintraege hier ergaenzen wirken SOFORT bei allen Nutzern - ohne App-Update. Mit 'symptomIds' laesst sich ein Fall unmittelbar einem gemeldeten Problem zuordnen; er steht dann bei der gezielten Untersuchung ganz oben.",
   "issues": [
     {
       "id": "kb-nvidia-50-dp-blackscreen",
@@ -75,6 +75,62 @@
       "detail": "Das ist ein klassischer Grund dafuer, warum Probleme 'mal da und mal nicht' sind: Ein defekter Zustand wird beim Herunterfahren gespeichert und beim naechsten Start wiederhergestellt. Ein echter Neustart raeumt auf - Herunterfahren nicht.",
       "recommendation": "Schnellstart deaktivieren (in dieser App als Ein-Klick-Reparatur enthalten). Danach ist 'Herunterfahren' wieder ein echtes Herunterfahren.",
       "causes": { "PowerSettings": 0.7, "GpuDriver": 0.3 },
+      "symptomIds": ["display-no-signal-boot", "display-black-random", "win-boot-slow", "net-no-internet"],
+      "fixIds": ["fast-startup-off"],
+      "links": []
+    },
+    {
+      "id": "kb-mic-desktop-apps-blocked",
+      "title": "Mikrofon fehlt nur in klassischen Programmen (Discord, Teams, OBS)",
+      "category": "Ton",
+      "severity": "warning",
+      "match": { "microphoneBlocked": true },
+      "summary": "Der Windows-Datenschutz blockiert den Mikrofonzugriff. Das Geraet bleibt in den Sound-Einstellungen sichtbar und zeigt sogar Pegelausschlag - Anwendungen bekommen es trotzdem nicht.",
+      "detail": "Windows fuehrt zwei getrennte Schalter: einen fuer Store-Apps und einen fuer klassische Desktop-Programme ('NonPackaged'). Discord, Teams, OBS, Steam-Spiele und die meisten Aufnahmeprogramme fallen unter den zweiten - und der steht in den Einstellungen unterhalb einer langen App-Liste, wird also regelmaessig uebersehen.\n\nDas Verwirrende daran: Die Anwendungen melden in diesem Fall fast nie 'Zugriff verweigert', sondern 'kein Mikrofon gefunden'. Deshalb wird an dieser Stelle typischerweise stundenlang an Treibern und Kabeln gesucht.",
+      "recommendation": "Einstellungen > Datenschutz und Sicherheit > Mikrofon. Beide Schalter einschalten: 'Mikrofonzugriff' oben und 'Desktop-Apps den Zugriff auf Ihr Mikrofon erlauben' ganz unten. Danach die betroffene Anwendung komplett beenden (auch aus dem Infobereich der Taskleiste) und neu starten.",
+      "causes": { "AppPermission": 0.9, "Microphone": 0.3 },
+      "symptomIds": ["mic-not-in-app", "mic-missing-system"],
+      "fixIds": ["mic-privacy-allow"],
+      "links": []
+    },
+    {
+      "id": "kb-mic-disabled-endpoint",
+      "title": "Aufnahmegeraet ist in Windows deaktiviert oder als abgesteckt gefuehrt",
+      "category": "Ton",
+      "severity": "info",
+      "match": { "hasInactiveMicrophone": true },
+      "summary": "Auf diesem System gibt es Aufnahmegeraete, die nicht aktiv sind. Deaktivierte Geraete blendet Windows in den Sound-Einstellungen standardmaessig aus - sie sind also da, aber unsichtbar.",
+      "detail": "Zustaende, die Windows kennt: aktiv, deaktiviert, nicht angeschlossen, nicht vorhanden. Nur 'aktiv' wird Anwendungen angeboten.\n\nBei Klinkenanschluessen kommt die Buchsenerkennung des Audiotreibers hinzu: Erkennt sie den Stecker nicht, bleibt das Geraet auf 'nicht angeschlossen' - obwohl das Mikrofon steckt. Das betrifft besonders haeufig Frontanschluesse am Gehaeuse.",
+      "recommendation": "Klassische Sound-Systemsteuerung oeffnen (in dieser App unter 'Werkzeuge'), Reiter 'Aufnahme', dann Rechtsklick in die Liste und 'Deaktivierte Geraete anzeigen' sowie 'Getrennte Geraete anzeigen' aktivieren. Das gewuenschte Geraet per Rechtsklick aktivieren und als Standardgeraet setzen.",
+      "causes": { "Microphone": 0.7, "AudioDevice": 0.3 },
+      "symptomIds": ["mic-missing-system", "mic-not-in-app", "audio-no-sound"],
+      "links": []
+    },
+    {
+      "id": "kb-wifi-power-saving",
+      "title": "WLAN-Adapter: Energiesparen als Ursache kurzer Verbindungsabbrueche",
+      "category": "Netzwerk",
+      "severity": "info",
+      "match": { "hasWifiAdapter": true },
+      "summary": "Windows darf Netzwerkadapter im Leerlauf abschalten. Beim Aufwachen dauert es ein bis zwei Sekunden - genug, um aus einem Spiel oder einer Videokonferenz zu fliegen, aber zu kurz, um beim Surfen aufzufallen.",
+      "detail": "Typisches Muster: Die Verbindung 'ist da', aber alle paar Minuten hakt es kurz. Im Ereignisprotokoll stehen dann Meldungen des WLAN-Dienstes oder von NDIS im gleichen Rhythmus.\n\nBei WLAN kommt hinzu, dass der Adapter im Energiesparbetrieb schwaechere Signale nicht mehr sauber haelt - der Abbruch wirkt dann wie ein Reichweitenproblem.",
+      "recommendation": "Geraete-Manager > Netzwerkadapter > Eigenschaften > Energieverwaltung: den Haken 'Computer kann das Geraet ausschalten, um Energie zu sparen' entfernen. Diese App bietet das als Ein-Klick-Reparatur fuer alle Adapter gleichzeitig an.",
+      "causes": { "Wifi": 0.6, "Network": 0.4, "PowerSettings": 0.4 },
+      "symptomIds": ["net-drops", "net-slow"],
+      "fixIds": ["network-power-off"],
+      "links": []
+    },
+    {
+      "id": "kb-device-error-code",
+      "title": "Ein Geraet meldet im Geraete-Manager einen Fehlercode",
+      "category": "Geraete",
+      "severity": "warning",
+      "match": { "hasProblemDevice": true },
+      "summary": "Windows sagt hier selbst, welches Geraet nicht laeuft. Das ist der direkteste vorhandene Hinweis - vor jeder weiteren Vermutung sollte dieser Punkt geklaert sein.",
+      "detail": "Die wichtigsten Codes:\n  1 / 28  Es ist kein passender Treiber installiert.\n  10      Das Geraet kann nicht gestartet werden (Treiber oder Firmware).\n  22      Das Geraet wurde deaktiviert.\n  43      Windows hat das Geraet gestoppt, weil es Fehler gemeldet hat.\n  45      Das Geraet ist gerade nicht angeschlossen - das ist normal und kein Fehler.",
+      "recommendation": "Treiber bevorzugt direkt beim Hersteller des Geraets bzw. des Mainboards laden, nicht ueber Windows Update. Bei Code 43 hilft oft: Geraet deinstallieren, Rechner neu starten, Treiber neu installieren. Bleibt es dabei, das Geraet an einem anderen Anschluss oder Rechner gegentesten.",
+      "causes": { "DeviceDriver": 0.8 },
+      "symptomIds": ["device-error-code", "device-usb-unknown", "device-webcam", "mic-missing-system"],
       "links": []
     }
   ]

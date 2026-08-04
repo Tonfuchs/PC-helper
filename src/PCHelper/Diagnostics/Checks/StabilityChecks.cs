@@ -15,6 +15,8 @@ public sealed class RestartHistoryCheck : ICheck
 {
     public string Name => "Neustart-Verlauf";
     public string Category => "Stabilitaet";
+    public IReadOnlyList<Cause> Topics { get; } =
+        new[] { Cause.PowerSupply, Cause.OperatingSystem, Cause.Thermal, Cause.Memory };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -148,6 +150,7 @@ public sealed class UnexpectedShutdownCheck : ICheck
 {
     public string Name => "Unerwartete Neustarts";
     public string Category => "Stabilitaet";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.PowerSupply, Cause.Thermal, Cause.Memory };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -291,6 +294,8 @@ public sealed class BugCheckCheck : ICheck
 {
     public string Name => "Bluescreens";
     public string Category => "Stabilitaet";
+    public IReadOnlyList<Cause> Topics { get; } =
+        new[] { Cause.Memory, Cause.DeviceDriver, Cause.OperatingSystem, Cause.GpuDriver, Cause.Storage };
 
     /// <summary>Ein einzelner Absturz mit Zeitpunkt und - sofern ermittelbar - Stoppcode.</summary>
     private sealed record Crash(DateTime Time, uint? Code, string Source);
@@ -491,6 +496,7 @@ public sealed class LiveKernelReportCheck : ICheck
 {
     public string Name => "Live-Kernel-Berichte";
     public string Category => "Stabilitaet";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.GpuDriver, Cause.DeviceDriver, Cause.DisplayLink };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -554,6 +560,8 @@ public sealed class WheaCheck : ICheck
 {
     public string Name => "Hardwarefehler (WHEA)";
     public string Category => "Stabilitaet";
+    public IReadOnlyList<Cause> Topics { get; } =
+        new[] { Cause.PowerSupply, Cause.Memory, Cause.Bios, Cause.Thermal, Cause.Cpu };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -612,6 +620,7 @@ public sealed class ThermalThrottleCheck : ICheck
 {
     public string Name => "Thermische Drosselung";
     public string Category => "Temperatur";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.Thermal, Cause.Cpu };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {

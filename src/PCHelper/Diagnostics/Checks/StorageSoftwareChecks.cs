@@ -7,6 +7,7 @@ public sealed class StorageHealthCheck : ICheck
 {
     public string Name => "Datentraeger-Gesundheit";
     public string Category => "Datentraeger";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.Storage };
 
     private static readonly string[] DiskProviders = { "disk", "Disk", "nvme", "stornvme", "storahci", "Ntfs", "volmgr" };
 
@@ -76,6 +77,7 @@ public sealed class OverlaySoftwareCheck : ICheck
 {
     public string Name => "Overlay- und Tuning-Software";
     public string Category => "Software";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.Software, Cause.GpuDriver };
 
     /// <summary>Prozessname -> was die Software macht und warum sie relevant ist.</summary>
     private static readonly (string Process, string Label, string Why)[] Watchlist =

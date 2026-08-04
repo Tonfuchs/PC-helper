@@ -14,11 +14,18 @@ public sealed class Fix
     /// <summary>Was genau geaendert wird.</summary>
     public required string Description { get; init; }
 
-    /// <summary>Warum das bei sporadischen Anzeigeproblemen hilft.</summary>
+    /// <summary>Warum das gegen das jeweilige Problem hilft.</summary>
     public required string Why { get; init; }
 
     public FixRisk Risk { get; init; } = FixRisk.Gering;
     public bool NeedsReboot { get; init; }
+
+    /// <summary>
+    /// Braucht die Aenderung Administratorrechte? Einstellungen des angemeldeten
+    /// Benutzers (HKCU) ausdruecklich nicht - sie muessen sogar ohne Elevation
+    /// laufen, weil sonst der Benutzerzweig eines anderen Kontos getroffen wuerde.
+    /// </summary>
+    public bool RequiresAdmin { get; init; } = true;
 
     /// <summary>Auszufuehrende Kommandozeilen (laufen als Administrator).</summary>
     public required IReadOnlyList<string> Commands { get; init; }
@@ -45,6 +52,18 @@ public static class FixCatalog
     private const string SettingUsbSuspend = "48e6b7a6-50f5-4782-a5d4-53bb8f07e226";
     private const string GraphicsDriversKey = @"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers";
     private const string PowerKey = @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power";
+    private const string ConsentKey = @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
+
+    /// <summary>Geraeteklasse "Netzwerkadapter" im Geraete-Manager.</summary>
+    private const string NetClassGuid = "{4d36e972-e325-11ce-bfc1-08002be10318}";
+
+    /// <summary>Setzt PnPCapabilities fuer alle Netzwerkadapter (0x18 = Energiesparen aus).</summary>
+    private static string NetworkPowerCommand(int value) =>
+        "powershell -NoProfile -ExecutionPolicy Bypass -Command \"" +
+        $"Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{NetClassGuid}' | " +
+        "Where-Object { $_.PSChildName -match '^[0-9]{4}$' } | " +
+        $"ForEach-Object {{ New-ItemProperty -Path $_.PSPath -Name PnPCapabilities -Value {value} " +
+        "-PropertyType DWord -Force | Out-Null }\"";
 
     public static IReadOnlyList<Fix> All { get; } = new List<Fix>
     {
@@ -266,6 +285,159 @@ public static class FixCatalog
                 @"reg delete ""HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Connectivity"" /f",
             },
         },
+
+        // ---------------- Ton, Mikrofon und Kamera ----------------
+
+        new()
+        {
+            Id = "mic-privacy-allow",
+            Title = "Mikrofonzugriff fuer alle Programme erlauben",
+            Category = "Ton",
+            Description = "Setzt die Windows-Datenschutzeinstellung fuer das Mikrofon auf 'erlaubt' - " +
+                          "sowohl fuer Apps als auch fuer klassische Desktop-Programme.",
+            Why = "Das ist der haeufigste Grund dafuer, dass ein Mikrofon in Windows einwandfrei aussieht, in " +
+                  "Discord, Teams oder OBS aber schlicht nicht auftaucht. Der entscheidende Schalter " +
+                  "('Desktop-Apps duerfen zugreifen') steht unterhalb einer langen App-Liste und wird deshalb " +
+                  "fast immer uebersehen.\n\n" +
+                  "Die Aenderung betrifft nur das angemeldete Benutzerkonto und laeuft bewusst ohne Adminrechte.\n\n" +
+                  "Die Ruecknahme entfernt die Eintraege wieder, setzt aber ausdruecklich kein 'verweigert' - " +
+                  "ein versehentlicher Klick auf 'Zuruecknehmen' legt das Mikrofon also nicht still. " +
+                  "Wer den Zugriff wirklich sperren will, macht das in den Windows-Einstellungen.",
+            Risk = FixRisk.Gering,
+            RequiresAdmin = false,
+            Commands = new[]
+            {
+                $"reg add \"{ConsentKey}\\microphone\" /v Value /t REG_SZ /d Allow /f",
+                $"reg add \"{ConsentKey}\\microphone\\NonPackaged\" /v Value /t REG_SZ /d Allow /f",
+            },
+            RevertCommands = new[]
+            {
+                $"reg delete \"{ConsentKey}\\microphone\" /v Value /f",
+                $"reg delete \"{ConsentKey}\\microphone\\NonPackaged\" /v Value /f",
+            },
+        },
+
+        new()
+        {
+            Id = "camera-privacy-allow",
+            Title = "Kamerazugriff fuer alle Programme erlauben",
+            Category = "Geraete",
+            Description = "Setzt die Windows-Datenschutzeinstellung fuer die Kamera auf 'erlaubt' - " +
+                          "fuer Apps und fuer klassische Desktop-Programme.",
+            Why = "Wie beim Mikrofon: Die Kamera ist vorhanden und funktioniert, Windows reicht sie aber nicht " +
+                  "an das Programm durch. Betroffene Anwendungen melden dann meist 'keine Kamera gefunden'.\n\n" +
+                  "Die Ruecknahme entfernt die Eintraege wieder und setzt kein 'verweigert'.",
+            Risk = FixRisk.Gering,
+            RequiresAdmin = false,
+            Commands = new[]
+            {
+                $"reg add \"{ConsentKey}\\webcam\" /v Value /t REG_SZ /d Allow /f",
+                $"reg add \"{ConsentKey}\\webcam\\NonPackaged\" /v Value /t REG_SZ /d Allow /f",
+            },
+            RevertCommands = new[]
+            {
+                $"reg delete \"{ConsentKey}\\webcam\" /v Value /f",
+                $"reg delete \"{ConsentKey}\\webcam\\NonPackaged\" /v Value /f",
+            },
+        },
+
+        new()
+        {
+            Id = "restart-audio-services",
+            Title = "Audiodienste neu starten",
+            Category = "Ton",
+            Description = "Startet 'Windows-Audio' und die 'Audio-Geraetehandler' neu und stellt sicher, " +
+                          "dass beide automatisch mit Windows starten.",
+            Why = "Haengen diese Dienste, verschwinden schlagartig alle Wiedergabe- und Aufnahmegeraete - " +
+                  "Programme melden dann 'kein Geraet gefunden', obwohl alles angeschlossen ist. Der Neustart " +
+                  "der Dienste baut die komplette Geraeteliste neu auf und ersetzt in vielen Faellen den Neustart des Rechners.",
+            Risk = FixRisk.Gering,
+            Duration = "wenige Sekunden, der Ton setzt dabei kurz aus",
+            Commands = new[]
+            {
+                "sc config Audiosrv start= auto",
+                "sc config AudioEndpointBuilder start= auto",
+                "net stop Audiosrv /y",
+                "net stop AudioEndpointBuilder /y",
+                "net start AudioEndpointBuilder",
+                "net start Audiosrv",
+            },
+        },
+
+        // ---------------- Netzwerk ----------------
+
+        new()
+        {
+            Id = "flush-dns",
+            Title = "DNS-Zwischenspeicher leeren",
+            Category = "Netzwerk",
+            Description = "Verwirft die zwischengespeicherten Namensaufloesungen und erneuert die IP-Adresse vom Router.",
+            Why = "Wenn IP-Adressen erreichbar sind, Webadressen aber nicht, liegt es an der Namensaufloesung. " +
+                  "Veraltete Eintraege im Zwischenspeicher zeigen dann auf Adressen, die es nicht mehr gibt - " +
+                  "das fuehlt sich an wie 'kein Internet', obwohl die Leitung steht.",
+            Risk = FixRisk.Gering,
+            Commands = new[]
+            {
+                "ipconfig /flushdns",
+                "ipconfig /release",
+                "ipconfig /renew",
+            },
+        },
+
+        new()
+        {
+            Id = "network-power-off",
+            Title = "Energiesparen der Netzwerkadapter abschalten",
+            Category = "Netzwerk",
+            Description = "Entfernt bei allen Netzwerkadaptern die Erlaubnis, das Geraet zum Energiesparen abzuschalten " +
+                          "(PnPCapabilities = 24).",
+            Why = "Legt Windows den Netzwerkadapter im Leerlauf schlafen, reisst die Verbindung fuer ein bis zwei " +
+                  "Sekunden ab. Das faellt beim Surfen kaum auf, wirft einen aber zuverlaessig aus Spielen und " +
+                  "Videokonferenzen - und ist eine der haeufigsten Ursachen fuer 'die Verbindung bricht staendig kurz ab'.",
+            Risk = FixRisk.Gering,
+            NeedsReboot = true,
+            Commands = new[] { NetworkPowerCommand(24) },
+            RevertCommands = new[] { NetworkPowerCommand(0) },
+        },
+
+        new()
+        {
+            Id = "network-reset-stack",
+            Title = "Netzwerkeinstellungen zuruecksetzen",
+            Category = "Netzwerk",
+            Description = "Setzt Winsock und den TCP/IP-Stapel auf die Werkseinstellung zurueck und fordert " +
+                          "eine neue IP-Adresse an.",
+            Why = "Raeumt Reste von VPN-Programmen, Proxy-Werkzeugen und fehlgeschlagenen Treiberinstallationen " +
+                  "aus dem Netzwerkstapel. Der Standardschritt, wenn eine Verbindung besteht, aber trotzdem " +
+                  "nichts durchgeht.",
+            Risk = FixRisk.Mittel,
+            NeedsReboot = true,
+            Duration = "wenige Sekunden, danach ist ein Neustart noetig",
+            Commands = new[]
+            {
+                "ipconfig /release",
+                "ipconfig /flushdns",
+                "netsh winsock reset",
+                "netsh int ip reset",
+                "ipconfig /renew",
+            },
+        },
+
+        // ---------------- Leistung ----------------
+
+        new()
+        {
+            Id = "power-high-performance",
+            Title = "Energieplan auf Hoechstleistung stellen",
+            Category = "Energie",
+            Description = "Aktiviert den Windows-Energieplan 'Hoechstleistung'.",
+            Why = "Nimmt die Taktabsenkung der CPU und einen Teil der Energiesparzustaende aus dem Spiel. " +
+                  "Als Dauerloesung nicht noetig, zum Eingrenzen aber sehr nuetzlich: Verschwinden Aussetzer " +
+                  "oder Traegheit damit, ist Energiesparen die Ursache und nicht die Hardware.",
+            Risk = FixRisk.Gering,
+            Commands = new[] { "powercfg /setactive SCHEME_MIN" },
+            RevertCommands = new[] { "powercfg /setactive SCHEME_BALANCED" },
+        },
     };
 
     public static Fix? ById(string id) => All.FirstOrDefault(f => f.Id == id);
@@ -297,6 +469,6 @@ public static class FixRunner
             return Task.FromResult(new ProcessResult(-1, "", "Fuer diese Reparatur ist keine Ruecknahme hinterlegt."));
 
         Log.Info($"Reparatur {(revert ? "zuruecknehmen" : "anwenden")}: {fix.Id}");
-        return Shell.RunElevatedBatchAsync(commands, (revert ? "revert-" : "") + fix.Id);
+        return Shell.RunBatchAsync(commands, (revert ? "revert-" : "") + fix.Id, fix.RequiresAdmin);
     }
 }

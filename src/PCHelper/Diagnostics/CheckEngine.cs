@@ -11,6 +11,9 @@ public sealed class CheckContext
 
     /// <summary>Betrachteter Zeitraum fuer Ereignisprotokolle.</summary>
     public int LookbackDays { get; init; } = 30;
+
+    /// <summary>Das gemeldete Symptom, sofern die Untersuchung gezielt laeuft.</summary>
+    public Symptom? Symptom { get; init; }
 }
 
 /// <summary>Eine einzelne Pruefung. Neue Pruefungen einfach hier implementieren und in <see cref="CheckEngine.All"/> registrieren.</summary>
@@ -18,6 +21,14 @@ public interface ICheck
 {
     string Name { get; }
     string Category { get; }
+
+    /// <summary>
+    /// Ursachenbereiche, zu denen diese Pruefung etwas beitragen kann. Bei einer
+    /// gezielten Untersuchung laufen nur Pruefungen, deren Themen zum Symptom
+    /// passen. Eine leere Liste bedeutet "gehoert zur Grundlage" und laeuft immer mit.
+    /// </summary>
+    IReadOnlyList<Cause> Topics => Array.Empty<Cause>();
+
     Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct);
 }
 
@@ -29,6 +40,12 @@ public sealed class DiagnosisResult
     public required IReadOnlyList<Suspicion> Suspicions { get; init; }
     public DateTime CompletedAt { get; init; } = DateTime.Now;
     public TimeSpan Duration { get; init; }
+
+    /// <summary>Das untersuchte Symptom - null bei einem vollstaendigen Rundumlauf.</summary>
+    public Symptom? Symptom { get; init; }
+
+    /// <summary>Anzahl ausgefuehrter Pruefungen (bei gezielter Untersuchung kleiner als die Gesamtzahl).</summary>
+    public int ChecksRun { get; init; }
 
     public int CriticalCount => Findings.Count(f => f.Severity == Severity.Critical);
     public int WarningCount => Findings.Count(f => f.Severity == Severity.Warning);
@@ -62,17 +79,46 @@ public static class CheckEngine
         new Checks.BiosAgeCheck(),
         new Checks.OverlaySoftwareCheck(),
         new Checks.SystemIntegrityCheck(),
+        new Checks.AudioDeviceCheck(),
+        new Checks.MicrophoneAccessCheck(),
+        new Checks.AudioServiceCheck(),
+        new Checks.NetworkAdapterCheck(),
+        new Checks.NetworkReachabilityCheck(),
+        new Checks.NetworkEventCheck(),
+        new Checks.ProblemDeviceCheck(),
+        new Checks.UsbEventCheck(),
+        new Checks.CameraAccessCheck(),
+        new Checks.CpuLoadCheck(),
+        new Checks.MemoryPressureCheck(),
+        new Checks.StartupLoadCheck(),
         new Checks.KnowledgeBaseCheck(),
         new Checks.RecentErrorsCheck(),
     };
 
     /// <summary>
+    /// Waehlt die Pruefungen aus, die zu einem Symptom etwas beitragen koennen.
+    /// Pruefungen ohne Themenangabe gehoeren zur Grundlage und laufen immer mit.
+    /// </summary>
+    public static IReadOnlyList<ICheck> For(Symptom? symptom)
+    {
+        var all = All();
+        if (symptom is null) return all;
+
+        return all
+            .Where(c => c.Topics.Count == 0 || c.Topics.Any(symptom.Causes.ContainsKey))
+            .ToList();
+    }
+
+    /// <summary>
     /// Fuehrt die Diagnose aus. <paramref name="progress"/> meldet (erledigt, gesamt, Name).
     /// Eine fehlgeschlagene Pruefung bricht den Lauf nicht ab.
+    /// Mit <paramref name="symptom"/> laufen nur die dazu passenden Pruefungen,
+    /// und die Befunde werden nach ihrer Relevanz fuer das Symptom sortiert.
     /// </summary>
     public static async Task<DiagnosisResult> RunAsync(
         KnowledgeBase knowledge,
         IProgress<(int Done, int Total, string Name)>? progress = null,
+        Symptom? symptom = null,
         CancellationToken ct = default)
     {
         var started = DateTime.Now;
@@ -80,8 +126,8 @@ public static class CheckEngine
         progress?.Report((0, 1, "Systemdaten werden erfasst ..."));
         var profile = await SystemProfile.CollectAsync(ct);
 
-        var checks = All();
-        var ctx = new CheckContext { Profile = profile, Knowledge = knowledge };
+        var checks = For(symptom);
+        var ctx = new CheckContext { Profile = profile, Knowledge = knowledge, Symptom = symptom };
         var findings = new List<Finding>();
 
         for (int i = 0; i < checks.Count; i++)
@@ -113,8 +159,11 @@ public static class CheckEngine
 
         progress?.Report((checks.Count, checks.Count, "Auswertung ..."));
 
-        var ordered = findings
-            .OrderByDescending(f => f.Severity)
+        // Ohne Symptom entscheidet der Schweregrad. Mit Symptom steht zuerst,
+        // was die gestellte Frage beantwortet - auch wenn es "nur" eine Warnung ist.
+        var ordered = (symptom is null
+                ? findings.OrderByDescending(f => f.Severity)
+                : findings.OrderByDescending(f => f.RelevanceFor(symptom)).ThenByDescending(f => f.Severity))
             .ThenBy(f => f.Category, StringComparer.CurrentCulture)
             .ThenBy(f => f.Title, StringComparer.CurrentCulture)
             .ToList();
@@ -123,8 +172,10 @@ public static class CheckEngine
         {
             Profile = profile,
             Findings = ordered,
-            Suspicions = SuspicionEngine.Rank(ordered),
+            Suspicions = SuspicionEngine.Rank(ordered, symptom),
             Duration = DateTime.Now - started,
+            Symptom = symptom,
+            ChecksRun = checks.Count,
         };
     }
 }

@@ -14,6 +14,7 @@
             <c:NotEmptyToVisibilityConverter x:Key="NotEmpty" />
             <c:NotNullToVisibilityConverter x:Key="NotNull" />
             <c:InverseBoolToVisibilityConverter x:Key="InverseBoolVis" />
+            <c:CountToVisibilityConverter x:Key="CountVis" />
             <BooleanToVisibilityConverter x:Key="BoolVis" />
         </ResourceDictionary>
     </Application.Resources>

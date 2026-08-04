@@ -27,6 +27,18 @@ public sealed class IssueMatch
 
     /// <summary>Trifft zu, wenn das BIOS aelter als die angegebene Anzahl Tage ist.</summary>
     public int? BiosOlderThanDays { get; set; }
+
+    /// <summary>Trifft nur zu, wenn mindestens ein Aufnahmegeraet deaktiviert oder abgesteckt ist.</summary>
+    public bool? HasInactiveMicrophone { get; set; }
+
+    /// <summary>Trifft nur zu, wenn Windows den Mikrofonzugriff irgendwo blockiert.</summary>
+    public bool? MicrophoneBlocked { get; set; }
+
+    /// <summary>Trifft nur zu, wenn mindestens ein Geraet einen Fehlercode traegt (ausser 45).</summary>
+    public bool? HasProblemDevice { get; set; }
+
+    /// <summary>Trifft nur zu, wenn ein WLAN-Adapter vorhanden ist.</summary>
+    public bool? HasWifiAdapter { get; set; }
 }
 
 /// <summary>Ein Eintrag der Wissensdatenbank.</summary>
@@ -42,6 +54,15 @@ public sealed class KnownIssue
     public string? Recommendation { get; set; }
     public Dictionary<string, double>? Causes { get; set; }
     public List<KnownIssueLink>? Links { get; set; }
+
+    /// <summary>
+    /// Symptome, auf die dieser Fall unmittelbar antwortet. Damit koennen neue
+    /// "das kenne ich"-Faelle ohne Programm-Update ausgeliefert werden.
+    /// </summary>
+    public List<string>? SymptomIds { get; set; }
+
+    /// <summary>IDs passender Ein-Klick-Reparaturen.</summary>
+    public List<string>? FixIds { get; set; }
 }
 
 public sealed class KnownIssueLink
@@ -157,6 +178,8 @@ public sealed class KnowledgeBase
                 Links = issue.Links?
                     .Select(l => new FindingLink { Label = l.Label, Url = l.Url })
                     .ToList() ?? new List<FindingLink>(),
+                SymptomIds = issue.SymptomIds ?? new List<string>(),
+                FixIds = issue.FixIds ?? new List<string>(),
             };
         }
     }
@@ -188,6 +211,15 @@ public sealed class KnowledgeBase
         if (m.RequiresDisplayPort == true && !p.HasDisplayPort) return false;
         if (m.MemoryOverclocked == true && !p.MemoryOverclocked) return false;
         if (m.FastStartupEnabled == true && !p.FastStartupEnabled) return false;
+
+        if (m.HasInactiveMicrophone == true &&
+            !p.AudioEndpoints.Any(e => e.IsCapture && !e.IsActive)) return false;
+
+        if (m.MicrophoneBlocked == true && p.MicrophoneConsent?.AnyBlock != true) return false;
+
+        if (m.HasProblemDevice == true && !p.ProblemDevices.Any(d => d.ErrorCode != 45)) return false;
+
+        if (m.HasWifiAdapter == true && !p.NetworkAdapters.Any(a => a.IsWireless)) return false;
 
         if (m.BiosOlderThanDays is { } days)
         {

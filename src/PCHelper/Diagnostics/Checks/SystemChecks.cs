@@ -57,6 +57,7 @@ public sealed class BiosAgeCheck : ICheck
 {
     public string Name => "BIOS-Stand";
     public string Category => "Mainboard";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.Bios, Cause.Memory };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -112,6 +113,7 @@ public sealed class DiskSpaceCheck : ICheck
 {
     public string Name => "Speicherplatz";
     public string Category => "Datentraeger";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.Storage, Cause.OperatingSystem };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -147,6 +149,7 @@ public sealed class SystemIntegrityCheck : ICheck
 {
     public string Name => "Windows-Integritaet";
     public string Category => "Windows";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.OperatingSystem, Cause.DeviceDriver };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {

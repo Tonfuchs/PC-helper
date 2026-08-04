@@ -10,6 +10,7 @@ public sealed class DisplayConnectionCheck : ICheck
 {
     public string Name => "Monitoranbindung";
     public string Category => "Anzeige";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.DisplayLink, Cause.GpuDriver };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -105,6 +106,7 @@ public sealed class DisplayDriverCrashCheck : ICheck
 {
     public string Name => "Grafiktreiber-Abstuerze";
     public string Category => "Anzeige";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.GpuDriver, Cause.DisplayLink };
 
     private static readonly string[] Providers =
     {
@@ -187,6 +189,7 @@ public sealed class GpuDriverCheck : ICheck
 {
     public string Name => "Grafiktreiber-Version";
     public string Category => "Anzeige";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.GpuDriver };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -271,6 +274,7 @@ public sealed class TdrSettingsCheck : ICheck
 {
     public string Name => "TDR-Einstellungen";
     public string Category => "Anzeige";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.GpuDriver };
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
@@ -322,6 +326,7 @@ public sealed class LiveSensorCheck : ICheck
 {
     public string Name => "GPU-Sensoren";
     public string Category => "Temperatur";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.Thermal, Cause.GpuDriver, Cause.Cpu };
 
     public async Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {

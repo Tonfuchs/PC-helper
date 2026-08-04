@@ -1,14 +1,19 @@
 # PC Helper
 
-**Diagnose- und Überwachungswerkzeug für sporadische Windows-Probleme** – besonders für den Fall
-„der Bildschirm wird einfach schwarz, der Ton läuft aber weiter“.
+**Diagnose- und Überwachungswerkzeug für Windows-Probleme aller Art** – vom Mikrofon, das Discord
+nicht findet, über abbrechende Internetverbindungen bis zum Bildschirm, der einfach schwarz wird.
 
-Solche Fehler sind schwer zu fassen, weil sie keine Spuren hinterlassen: Kein Bluescreen, kein
-Absturzbericht, im Ereignisprotokoll oft gar nichts. PC Helper geht das von zwei Seiten an:
+Der Einstieg ist bewusst nicht technisch: Man beschreibt in eigenen Worten, **was nicht
+funktioniert**. PC Helper sucht den passenden bekannten Fall heraus, sagt, was typischerweise
+dahintersteckt, und untersucht dann gezielt in diese Richtung – statt stumpf alles zu prüfen.
 
-1. **Diagnose** – eine gründliche Einmalprüfung von Hardware, Treibern, Energieeinstellungen und
+Drei Bausteine:
+
+1. **Problem melden** – Symptom eingeben oder auswählen. Daraus ergeben sich die passenden
+   Prüfungen, Sofortschritte, Reparaturen und Windows-Werkzeuge.
+2. **Diagnose** – Prüfung von Hardware, Treibern, Ton, Netzwerk, Geräten, Energieeinstellungen und
    Ereignisprotokoll, verdichtet zu einer nachvollziehbaren Verdachtsreihenfolge.
-2. **Dauerüberwachung** – zeichnet im Hintergrund fortlaufend Messwerte auf, damit nach einem
+3. **Dauerüberwachung** – zeichnet im Hintergrund fortlaufend Messwerte auf, damit nach einem
    Vorfall rekonstruierbar ist, was unmittelbar davor passiert ist. Auch dann, wenn der Rechner
    hart ausgegangen ist.
 
@@ -29,6 +34,40 @@ Windows, .NET 8, WPF. Quelloffen unter der MIT-Lizenz.
 > Über *Weitere Informationen → Trotzdem ausführen* startet die App.
 > Wer das prüfen möchte: Im Release liegt `SHA256SUMS.txt` mit der Prüfsumme, und die App
 > verifiziert bei ihren eigenen Updates auch automatisch dagegen.
+
+### Ein Problem melden
+
+Auf der Seite **Problem melden** beschreibt man in einem Satz, was los ist – zum Beispiel
+*„mein Mikrofon wird in Discord nicht erkannt“*. Die App vergleicht das mit ihrem Katalog
+bekannter Fälle und zeigt die besten Treffer. Zum gewählten Fall erscheinen dann:
+
+- **Was typischerweise dahintersteckt** – die wahrscheinlichen Ursachenbereiche im Klartext.
+- **Was sich sofort selbst prüfen lässt** – zwei Minuten Handarbeit, die oft schon reichen.
+- **Passende Werkzeuge** – öffnen die zuständige Windows-Stelle direkt (etwa
+  *Datenschutz: Mikrofon* oder die klassische Sound-Systemsteuerung, in der deaktivierte
+  Geräte überhaupt erst sichtbar werden).
+- **Passende Reparaturen** – umkehrbare Ein-Klick-Änderungen.
+- **Gezielte Untersuchung starten** – es laufen nur die Prüfungen, die zu diesem Problem etwas
+  beitragen können. Die Befunde stehen danach nach ihrer Bedeutung für genau dieses Problem,
+  nicht nach Schweregrad.
+
+Der Katalog deckt sechs Bereiche ab: Bild und Anzeige, Ton und Mikrofon, Internet und Netzwerk,
+Leistung und Abstürze, Geräte und Anschlüsse, Windows und Datenträger. Passt nichts davon, führt
+**„Alles prüfen“** weiterhin den vollständigen Rundumlauf aus.
+
+#### Beispiel: „Discord findet mein Mikrofon nicht“
+
+Der häufigste Grund ist keine Hardware, sondern eine Berechtigung: Windows führt **zwei getrennte
+Schalter** für den Mikrofonzugriff – einen für Store-Apps und einen für klassische Desktop-Programme
+(*„Desktop-Apps den Zugriff auf Ihr Mikrofon erlauben“*). Der zweite steht unterhalb einer langen
+App-Liste und wird fast immer übersehen. Betroffene Programme melden dann nicht *„Zugriff
+verweigert“*, sondern *„kein Mikrofon gefunden“* – weshalb an dieser Stelle typischerweise
+stundenlang an Treibern gesucht wird.
+
+PC Helper liest beide Schalter, die per Gruppenrichtlinie gesetzten Sperren und die einzeln
+gesperrten Anwendungen direkt aus – und bietet die Freigabe als Reparatur an. Ebenso wird die
+Geräteliste **inklusive der deaktivierten und abgesteckten Geräte** aus der Registrierung gelesen,
+denn genau die blendet Windows in den Sound-Einstellungen standardmäßig aus.
 
 ### Vorgehen bei sporadischen Schwarzbildern
 
@@ -94,6 +133,16 @@ Alles zusammen landet im Bericht und fließt in die Prüfung *Neustart-Verlauf* 
 - **Grafiktreiber-Resets (TDR), WHEA-Hardwarefehler, Bluescreens, Live-Kernel-Berichte** aus dem
   Ereignisprotokoll der letzten 30 Tage.
 - **EXPO/XMP**, BIOS-Alter, Energieeinstellungen, Overlay- und Tuning-Software, Datenträgerzustand.
+- **Audiogeräte** inklusive der deaktivierten und abgesteckten – die Windows in den
+  Sound-Einstellungen ausblendet – sowie den Zustand der beiden Audiodienste.
+- **Mikrofon- und Kamerazugriff**: globale Einstellung, der Schalter für Desktop-Programme,
+  Gruppenrichtlinien und einzeln gesperrte Anwendungen.
+- **Netzwerk**: Adapterzustand, IP-Konfiguration, DHCP-Ausfall (169.254er-Adresse), zu langsam
+  ausgehandelte Kabelverbindungen – dazu ein Erreichbarkeitstest, der **Router, Internet und
+  Namensauflösung getrennt** prüft. Erst diese Dreiteilung sagt, wo die Kette reißt.
+- **Geräte mit Fehlercode** im Geräte-Manager, mit Übersetzung der Codes (10, 22, 28, 43 …).
+- **USB-Ereignisse** und das selektive USB-Energiesparen als Ursache von Aussetzern.
+- **Prozessorlast** mit Benennung der Verursacher, Speicherbelegung und Autostart-Umfang.
 
 ### Reparaturen
 
@@ -111,6 +160,12 @@ weitere. Dabei gilt:
 Alle Daten bleiben auf dem Rechner (`%LOCALAPPDATA%\PCHelper`, Berichte unter
 `Dokumente\PC Helper\Berichte`). Nach außen gehen ausschließlich zwei Abrufe an GitHub:
 die Update-Prüfung und das Nachladen der Wissensdatenbank. Es wird nichts hochgeladen.
+
+Eine Ausnahme ist der **Erreichbarkeitstest** der Netzwerkprüfung: Er sendet je vier Ping-Pakete an
+das eigene Standardgateway und an `1.1.1.1` und löst einmal `www.msftconnecttest.com` auf – anders
+lässt sich nicht feststellen, ob die Verbindung am Router, am Anschluss oder an der Namensauflösung
+scheitert. Es werden dabei keinerlei Inhalte übertragen. Der Test läuft nur mit, wenn ein
+Netzwerk-Symptom gewählt wurde oder die vollständige Prüfung ausgeführt wird.
 
 Ein erzeugter Bericht enthält allerdings Hardware- und Ereignisprotokolldaten inklusive Geräte- und
 teilweise Benutzernamen. Vor dem Weitergeben also kurz durchsehen.
@@ -182,35 +237,77 @@ neues Release.
     "biosOlderThanDays": 240,
     "cpuNameContains": ["Ryzen 9"],
     "boardContains": ["X870"],
-    "processNameContains": ["iCUE"]
+    "processNameContains": ["iCUE"],
+    "hasInactiveMicrophone": true,    // Aufnahmegerät deaktiviert oder abgesteckt
+    "microphoneBlocked": true,        // Windows sperrt den Mikrofonzugriff
+    "hasProblemDevice": true,         // Gerät mit Fehlercode im Geräte-Manager
+    "hasWifiAdapter": true
   },
   "summary": "Ein Satz für die Übersicht.",
   "detail": "Ausführliche Erklärung.",
   "recommendation": "Was konkret zu tun ist.",
   "causes": { "GpuDriver": 0.4, "DisplayLink": 0.6 },
+  "symptomIds": ["mic-not-in-app"],   // stellt den Fall bei diesem Problem nach ganz oben
+  "fixIds": ["mic-privacy-allow"],
   "links": [{ "label": "Quelle", "url": "https://..." }]
 }
 ```
 
 Gültige Ursachenbereiche für `causes`: `GpuDriver`, `DisplayLink`, `Memory`, `PowerSupply`,
-`PowerSettings`, `Thermal`, `Storage`, `Software`, `Bios`, `OperatingSystem`.
+`PowerSettings`, `Thermal`, `Storage`, `Software`, `Bios`, `OperatingSystem`, `AudioDevice`,
+`Microphone`, `AppPermission`, `Network`, `Wifi`, `UsbDevice`, `DeviceDriver`, `Cpu`.
 Der CI-Workflow prüft bei jedem Push, ob die Datei gültiges JSON ist und die IDs eindeutig sind.
+
+Über `symptomIds` lässt sich ein neuer „das kenne ich“-Fall **ohne App-Update** an ein bereits
+vorhandenes Symptom hängen. Gültige Symptom-IDs stehen in
+[`Diagnostics/Symptoms.cs`](src/PCHelper/Diagnostics/Symptoms.cs).
+
+### Ein neues Symptom ergänzen
+
+Eintrag in `SymptomCatalog.All` in [`Diagnostics/Symptoms.cs`](src/PCHelper/Diagnostics/Symptoms.cs)
+anlegen. Ein Symptom besteht aus:
+
+| Feld | Bedeutung |
+| --- | --- |
+| `Title` | Wie ein Anwender es formulieren würde – nicht wie ein Techniker |
+| `Description` | Was typischerweise dahintersteckt, zwei bis drei Sätze |
+| `Keywords` | Begriffe für die Freitextsuche, Umgangssprache ausdrücklich erwünscht |
+| `Causes` | Vorabgewichtung der Ursachenbereiche (0…1) |
+| `FirstSteps` | Was sich in zwei Minuten ohne Werkzeug prüfen lässt |
+| `FixIds` / `ToolIds` | Verweise auf `FixCatalog` bzw. die Werkzeugliste |
+
+`Causes` ist der Dreh- und Angelpunkt: Daraus ergibt sich automatisch, **welche Prüfungen laufen**
+(alle mit passendem `Topics`-Eintrag), wie die Befunde sortiert werden und wie stark die
+Verdachtsliste in diese Richtung gewichtet wird. Es ist also keine weitere Verdrahtung nötig.
+
+`PCHelper.exe --selftest` prüft, ob alle `FixIds` und `ToolIds` eines Symptoms auch existieren.
 
 ### Eine neue Prüfung ergänzen
 
 1. Klasse anlegen, die `ICheck` implementiert (Vorlagen in
    [`src/PCHelper/Diagnostics/Checks/`](src/PCHelper/Diagnostics/Checks/)).
-2. In `CheckEngine.All()` registrieren – die Reihenfolge bestimmt die Anzeige.
+2. `Topics` setzen – die Ursachenbereiche, zu denen die Prüfung etwas beitragen kann. Eine leere
+   Liste bedeutet „gehört zur Grundlage“ und läuft immer mit (Systemübersicht, Wissensdatenbank,
+   Fehlerprotokoll).
+3. In `CheckEngine.All()` registrieren – die Reihenfolge bestimmt die Anzeige.
 
 Ein `Finding` trägt neben Titel und Text eine Gewichtung auf Ursachenbereiche (`Causes`).
 Daraus errechnet die `SuspicionEngine` die Verdachtsreihenfolge; der Schweregrad bestimmt,
 wie stark ein Befund zählt. Befunde mit `Severity.Ok` erhöhen keinen Verdacht.
+
+Zusätzlich kann ein `Finding` über `SymptomIds` angeben, auf welche Symptome es **unmittelbar
+antwortet**. Solche Befunde stehen bei der gezielten Untersuchung ganz oben – unabhängig davon,
+ob sie als „kritisch“ oder nur als „auffällig“ eingestuft sind.
 
 ### Eine neue Reparatur ergänzen
 
 Eintrag in `FixCatalog.All` anlegen: Titel, Beschreibung, Begründung, die auszuführenden Befehle und
 möglichst die Befehle zur Rücknahme. Alles Weitere – UAC-Abfrage, Protokollierung, Anzeige des
 Befehls vor der Ausführung – erledigt die Oberfläche automatisch.
+
+Ändert eine Reparatur den **Benutzerzweig der Registrierung** (`HKCU`), muss `RequiresAdmin = false`
+gesetzt werden. Sonst würde bei einer Elevation mit einem anderen Konto dessen Benutzerzweig
+geändert – und beim angemeldeten Benutzer bliebe alles beim Alten.
 
 ### Selbst bauen
 
@@ -231,9 +328,18 @@ Voraussetzung: .NET 8 SDK.
 PCHelper.exe --selftest
 ```
 
-Führt eine vollständige Diagnose ohne Oberfläche aus, schreibt HTML- und PDF-Bericht, protokolliert
-alle Befunde nach `%LOCALAPPDATA%\PCHelper\pchelper.log` und beendet sich mit Exitcode 0 (bzw. 1 bei
-Fehler). Wird auch im CI-Workflow als Rauchtest verwendet.
+Führt ohne Oberfläche aus:
+
+1. eine vollständige Diagnose, schreibt HTML- und PDF-Bericht,
+2. eine Prüfung des Symptomkatalogs gegen Reparatur- und Werkzeugliste (findet Tippfehler in
+   Verweisen),
+3. einen Aufbau des Hauptfensters samt aller Seiten ohne Anzeige – fehlende XAML-Ressourcen fallen
+   sonst erst auf, wenn jemand die betreffende Seite öffnet,
+4. eine gezielte Untersuchung inklusive Freitext-Zuordnung als Beispiel.
+
+Alles wird nach `%LOCALAPPDATA%\PCHelper\pchelper.log` protokolliert; Exitcode 0 (bzw. 1 bei
+Fehler). Wird auch im CI-Workflow als Rauchtest verwendet. Der Selbsttest ist von der
+Einzelinstanz-Sperre ausgenommen, läuft also auch bei bereits geöffneter App.
 
 ### PDF-Erzeugung
 
@@ -250,7 +356,7 @@ die Textvermessung WPF-Schriften benutzt.
 ```text
 src/PCHelper/
   Core/           Einstellungen, Protokoll, Win32-Aufrufe (Anzeigekonfiguration, Energie-API)
-  Diagnostics/    Systemprofil, Prüfmodul, Ereignisprotokoll, die einzelnen Prüfungen
+  Diagnostics/    Systemprofil, Prüfmodul, Ereignisprotokoll, Symptomkatalog, die Prüfungen
   Knowledge/      Wissensdatenbank bekannter Problemmuster
   Monitoring/     Dauerüberwachung, Messreihen, Vorfälle
   Fixes/          Katalog der Reparaturen und deren Ausführung
@@ -279,6 +385,10 @@ knowledge/        known-issues.json (eingebettet und per HTTPS nachladbar)
 ## Grenzen
 
 - **Windows only**, x64. Getestet auf Windows 11.
+- **Die Symptomsuche ist ein Wortvergleich, kein Sprachmodell.** Sie gleicht die Eingabe gegen
+  hinterlegte Stichwörter ab – nachvollziehbar, sofort da und ohne Netzverbindung, aber sie versteht
+  keine Umschreibungen, für die niemand ein Stichwort hinterlegt hat. Findet sie nichts, hilft die
+  vollständige Prüfung weiter.
 - **GPU-Sensoren nur für NVIDIA** (über `nvidia-smi`, liegt bei installiertem Treiber in
   `System32`). Bei AMD- und Intel-Grafik bleiben Temperatur und Leistungsaufnahme leer;
   alle übrigen Prüfungen laufen normal.

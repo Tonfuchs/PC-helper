@@ -37,6 +37,12 @@ public static class PdfReportBuilder
         // ---------------- Zusammenfassung ----------------
         pdf.Heading("Zusammenfassung", 1);
 
+        if (result.Symptom is { } symptom)
+        {
+            pdf.KeyValue("Gemeldetes Problem", symptom.Title);
+            pdf.Paragraph(symptom.Description, muted: true, size: 8.4);
+        }
+
         pdf.Paragraph(
             $"Es wurden {result.Findings.Count} Pruefungen ausgewertet: " +
             $"{result.CriticalCount} kritische Befunde, {result.WarningCount} auffaellige Befunde, " +

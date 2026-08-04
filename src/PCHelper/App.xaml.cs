@@ -134,6 +134,10 @@ public partial class App : Application
 
             var pdfPath = Reporting.PdfReportBuilder.Write(result, incidentList, telemetry);
             Log.Info("Selbsttest: PDF-Bericht geschrieben nach " + pdfPath);
+
+            if (!CheckSymptomCatalog()) exitCode = 1;
+            if (!CheckUserInterface(incidents)) exitCode = 1;
+            await CheckFocusedRunAsync(knowledge);
         }
         catch (Exception ex)
         {
@@ -144,6 +148,89 @@ public partial class App : Application
         {
             Shutdown(exitCode);
         }
+    }
+
+    /// <summary>
+    /// Prueft den Symptomkatalog gegen Reparatur- und Werkzeugliste. Ein Tippfehler
+    /// in einer Kennung faellt sonst erst auf, wenn ein Nutzer davorsteht.
+    /// </summary>
+    private static bool CheckSymptomCatalog()
+    {
+        var tools = new ViewModels.ToolsViewModel();
+        var toolIds = tools.Tools.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+        bool ok = true;
+
+        foreach (var symptom in Diagnostics.SymptomCatalog.All)
+        {
+            foreach (var fixId in symptom.FixIds)
+            {
+                if (Fixes.FixCatalog.ById(fixId) is not null) continue;
+                Log.Error($"Selbsttest: Symptom '{symptom.Id}' verweist auf unbekannte Reparatur '{fixId}'.");
+                ok = false;
+            }
+
+            foreach (var toolId in symptom.ToolIds)
+            {
+                if (toolIds.Contains(toolId)) continue;
+                Log.Error($"Selbsttest: Symptom '{symptom.Id}' verweist auf unbekanntes Werkzeug '{toolId}'.");
+                ok = false;
+            }
+        }
+
+        Log.Info($"Selbsttest: {Diagnostics.SymptomCatalog.All.Count} Symptome geprueft - " +
+                 (ok ? "alle Verweise gueltig." : "FEHLERHAFTE VERWEISE, siehe oben."));
+        return ok;
+    }
+
+    /// <summary>
+    /// Baut das Hauptfenster samt aller Seiten einmal auf, ohne es anzuzeigen.
+    /// Fehlende Ressourcenverweise in XAML fallen sonst erst auf, wenn jemand
+    /// die betreffende Seite oeffnet - und dann mit einem Absturz.
+    /// </summary>
+    private bool CheckUserInterface(IncidentStore incidents)
+    {
+        try
+        {
+            var vm = new MainViewModel(_settings, KnowledgeBase.LoadEmbedded(), incidents,
+                new MonitorService(_settings, incidents));
+
+            var window = new MainWindow { DataContext = vm };
+            window.Measure(new System.Windows.Size(1180, 780));
+            window.Close();
+
+            Log.Info($"Selbsttest: Oberflaeche laedt fehlerfrei ({vm.Tools.Tools.Count} Werkzeuge, " +
+                     $"{vm.Fixes.Items.Count} Reparaturen, {vm.Symptoms.Groups.Count} Symptomgruppen).");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Selbsttest: Oberflaeche konnte nicht aufgebaut werden", ex);
+            return false;
+        }
+    }
+
+    /// <summary>Fuehrt beispielhaft eine gezielte Untersuchung aus - so wie es die Oberflaeche tut.</summary>
+    private static async Task CheckFocusedRunAsync(KnowledgeBase knowledge)
+    {
+        const string probe = "mein mikrofon wird in discord nicht erkannt";
+
+        var matches = Diagnostics.SymptomMatcher.Match(probe, 3);
+        Log.Info($"Selbsttest: Freitext \"{probe}\" ->");
+        foreach (var (symptom, score) in matches)
+            Log.Info($"Selbsttest:   {score,6:0.#} Punkte - {symptom.Title}");
+
+        var chosen = matches.FirstOrDefault().Symptom ?? Diagnostics.SymptomCatalog.All[0];
+        var focused = await Diagnostics.CheckEngine.RunAsync(knowledge, symptom: chosen);
+
+        Log.Info($"Selbsttest: Gezielte Untersuchung '{chosen.Id}' - {focused.ChecksRun} Pruefungen, " +
+                 $"{focused.Findings.Count} Befunde in {focused.Duration.TotalSeconds:0.#} s.");
+
+        foreach (var finding in focused.Findings.Take(5))
+            Log.Info($"Selbsttest:   Relevanz {finding.RelevanceFor(chosen):0.##} - " +
+                     $"[{finding.SeverityText}] {finding.Title}");
+
+        foreach (var suspicion in focused.Suspicions.Take(3))
+            Log.Info($"Selbsttest:   Verdacht {suspicion.Percent:0} % - {suspicion.Title}");
     }
 
     /// <summary>Nicht blockierende Startaufgaben: Aufraeumen, Wissensdatenbank, Update-Suche.</summary>

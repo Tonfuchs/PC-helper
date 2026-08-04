@@ -36,7 +36,9 @@ public sealed class DiagnoseViewModel : ObservableObject
     public ObservableCollection<Finding> Findings { get; } = new();
     public ObservableCollection<Suspicion> Suspicions { get; } = new();
 
+    /// <summary>Startet den vollstaendigen Rundumlauf ohne Vorannahme.</summary>
     public RelayCommand RunCommand { get; }
+
     public RelayCommand ExportPdfCommand { get; }
     public RelayCommand ExportHtmlCommand { get; }
     public RelayCommand CopyMarkdownCommand { get; }
@@ -49,6 +51,8 @@ public sealed class DiagnoseViewModel : ObservableObject
             Set(ref _result, value);
             Raise(nameof(HasResult));
             Raise(nameof(SummaryText));
+            Raise(nameof(SymptomTitle));
+            Raise(nameof(HasSymptom));
             Raise(nameof(CriticalCount));
             Raise(nameof(WarningCount));
             Raise(nameof(OkCount));
@@ -83,16 +87,28 @@ public sealed class DiagnoseViewModel : ObservableObject
 
     public Suspicion? TopSuspicion => Result?.Suspicions.FirstOrDefault();
 
+    /// <summary>Das zuletzt untersuchte Symptom - null bei einem vollstaendigen Lauf.</summary>
+    public string SymptomTitle => Result?.Symptom?.Title ?? "";
+
+    public bool HasSymptom => Result?.Symptom is not null;
+
     public string SummaryText => Result is null
-        ? "Die Diagnose prueft Hardware, Treiber, Energieeinstellungen und das Ereignisprotokoll der letzten 30 Tage."
+        ? "Die Diagnose prueft Hardware, Treiber, Ton, Netzwerk, Geraete, Energieeinstellungen und das " +
+          "Ereignisprotokoll der letzten 30 Tage."
         : $"{Result.CriticalCount} kritisch, {Result.WarningCount} auffaellig, {Result.OkCount} in Ordnung " +
           $"(geprueft am {Result.CompletedAt:dd.MM.yyyy 'um' HH:mm}).";
 
-    public async Task RunAsync()
+    /// <summary>
+    /// Fuehrt die Diagnose aus. Mit Symptom laufen nur die dazu passenden
+    /// Pruefungen, und die Befunde stehen nach Relevanz statt nach Schweregrad.
+    /// </summary>
+    public async Task RunAsync(Symptom? symptom = null)
     {
         IsRunning = true;
         ProgressValue = 0;
-        ProgressText = "Diagnose wird vorbereitet ...";
+        ProgressText = symptom is null
+            ? "Diagnose wird vorbereitet ..."
+            : $"Untersuchung zu '{symptom.Title}' wird vorbereitet ...";
 
         try
         {
@@ -102,7 +118,7 @@ public sealed class DiagnoseViewModel : ObservableObject
                 ProgressText = $"{p.Name} ({p.Done}/{p.Total})";
             });
 
-            var result = await CheckEngine.RunAsync(_knowledge, progress);
+            var result = await CheckEngine.RunAsync(_knowledge, progress, symptom);
             Result = result;
 
             Suspicions.Clear();
@@ -111,7 +127,8 @@ public sealed class DiagnoseViewModel : ObservableObject
             ApplyFilter();
 
             ProgressValue = 100;
-            ProgressText = $"Fertig - {result.Findings.Count} Befunde in {result.Duration.TotalSeconds:0.#} Sekunden.";
+            ProgressText = $"Fertig - {result.Findings.Count} Befunde aus {result.ChecksRun} Pruefungen " +
+                           $"in {result.Duration.TotalSeconds:0.#} Sekunden.";
         }
         catch (Exception ex)
         {
