@@ -91,6 +91,68 @@
                 </Border>
             </UniformGrid>
 
+            <!-- GPU im Detail -->
+            <Border Style="{StaticResource Card}" Visibility="{Binding Monitoring.HasGpuDetail, Converter={StaticResource BoolVis}}">
+                <StackPanel>
+                    <TextBlock Text="GPU im Detail" Style="{StaticResource H2}" />
+                    <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,12"
+                               Text="Der Task-Manager zeigt pro Prozess nur eine einzelne Engine (meist 3D) und verteilt Last auf mehrere Prozesse - das ergibt oft eine viel zu niedrige Prozentzahl, obwohl die Karte insgesamt ausgelastet ist. Diese Werte kommen direkt vom Treiber (nvidia-smi)." />
+
+                    <UniformGrid Columns="3" Rows="2">
+                        <StackPanel Margin="0,0,8,10">
+                            <TextBlock Text="{Binding Monitoring.GpuMemoryText}" FontWeight="SemiBold" />
+                            <TextBlock Text="Grafikspeicher (VRAM)" Style="{StaticResource Caption}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,8,10">
+                            <TextBlock Text="{Binding Monitoring.GpuMemoryUtilText}" FontWeight="SemiBold" />
+                            <TextBlock Text="Speicher-Controller" Style="{StaticResource Caption}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="{Binding Monitoring.GpuFanText}" FontWeight="SemiBold" />
+                            <TextBlock Text="Luefter" Style="{StaticResource Caption}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,8,0">
+                            <TextBlock Text="{Binding Monitoring.GpuEncoderText}" FontWeight="SemiBold" />
+                            <TextBlock Text="Video Encode" Style="{StaticResource Caption}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,8,0">
+                            <TextBlock Text="{Binding Monitoring.GpuDecoderText}" FontWeight="SemiBold" />
+                            <TextBlock Text="Video Decode" Style="{StaticResource Caption}" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Monitoring.GpuPcieText}" FontWeight="SemiBold" />
+                            <TextBlock Text="PCIe-Link" Style="{StaticResource Caption}" />
+                        </StackPanel>
+                    </UniformGrid>
+
+                    <Border CornerRadius="8" Padding="12,10" Margin="0,10,0,0" Background="{StaticResource AccentSoft}"
+                            Visibility="{Binding Monitoring.GpuIsThrottled, Converter={StaticResource BoolVis}}">
+                        <TextBlock TextWrapping="Wrap">
+                            <Run Text="Drosselung aktiv:" FontWeight="SemiBold" />
+                            <Run Text=" " />
+                            <Run Text="{Binding Monitoring.GpuThrottleText}" />
+                        </TextBlock>
+                    </Border>
+
+                    <TextBlock Text="Groesste VRAM-Verbraucher" Style="{StaticResource Caption}" Margin="0,14,0,6"
+                               Visibility="{Binding Monitoring.GpuProcesses.Count, Converter={StaticResource CountVis}}" />
+                    <ItemsControl ItemsSource="{Binding Monitoring.GpuProcesses}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding ProcessName}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding MemoryText}" Style="{StaticResource Muted}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
             <!-- Verlaeufe -->
             <Border Style="{StaticResource Card}">
                 <StackPanel>

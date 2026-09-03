@@ -33,6 +33,10 @@ public sealed class MonitorService : IDisposable
     private string? _lastSignature;
     private string? _pendingEventMarker;
     private int _shutdownRecorded;
+    private int _gpuProcessCycle;
+
+    /// <summary>Alle wie oft Messzyklen die (teurere) Liste der VRAM-Prozesse neu abgefragt wird.</summary>
+    private const int GpuProcessSampleEveryNCycles = 5;
 
     public MonitorService(Settings settings, IncidentStore incidents)
     {
@@ -52,6 +56,12 @@ public sealed class MonitorService : IDisposable
 
     /// <summary>Der zuletzt erfasste Messpunkt.</summary>
     public TelemetrySample? Latest { get; private set; }
+
+    /// <summary>Die vollstaendige zuletzt gelesene GPU-Momentaufnahme (Fan, Engines, PCIe-Link, Drosselung).</summary>
+    public GpuSample? LatestGpu { get; private set; }
+
+    /// <summary>Prozesse, die zuletzt Grafikspeicher belegten (VRAM-genau, seltener aktualisiert als die uebrige Sensorik).</summary>
+    public IReadOnlyList<GpuProcessSample> LatestGpuProcesses { get; private set; } = Array.Empty<GpuProcessSample>();
 
     public void Start()
     {
@@ -140,6 +150,16 @@ public sealed class MonitorService : IDisposable
             sample.GpuClockMhz = g.ClockMhz;
             sample.GpuMemoryMb = g.MemoryUsedMb;
             sample.GpuState = g.PerformanceState;
+            LatestGpu = g;
+
+            // Die Liste der VRAM-Prozesse ist ein eigener nvidia-smi-Aufruf und aendert
+            // sich langsamer als die Sensorik - seltener abfragen spart Prozessstarts.
+            if (_gpuProcessCycle++ % GpuProcessSampleEveryNCycles == 0)
+                LatestGpuProcesses = await NvidiaSmi.SampleProcessesAsync(ct);
+        }
+        else
+        {
+            LatestGpu = null;
         }
 
         DetectDisplayChange(sample, signature, displays.Count);

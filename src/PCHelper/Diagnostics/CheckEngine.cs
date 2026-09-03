@@ -74,6 +74,7 @@ public static class CheckEngine
         new Checks.PowerSettingsCheck(),
         new Checks.ThermalThrottleCheck(),
         new Checks.LiveSensorCheck(),
+        new Checks.GpuUtilizationDetailCheck(),
         new Checks.StorageHealthCheck(),
         new Checks.DiskSpaceCheck(),
         new Checks.BiosAgeCheck(),

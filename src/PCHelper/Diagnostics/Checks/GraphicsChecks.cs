@@ -384,3 +384,160 @@ public sealed class LiveSensorCheck : ICheck
 
     private static string Fmt(double? v, string unit) => v is null ? "-" : $"{v.Value:0.#} {unit}";
 }
+
+/// <summary>
+/// Detaillierte GPU-Auslastung samt Optimierungshinweisen - direkt vom Treiber
+/// (nvidia-smi) statt aus dem Task-Manager. Der Task-Manager zeigt pro Prozess nur
+/// eine einzelne Engine (meist 3D) und teilt Last auf mehrere Prozesse auf; das
+/// ergibt bei Encoder-/Decoder-Last (Aufnahme, Streaming, Videobearbeitung) oder
+/// Multi-Prozess-Last (Browser, Electron-Apps) oft eine viel zu niedrige Zahl,
+/// obwohl die Karte insgesamt ausgelastet ist.
+/// </summary>
+public sealed class GpuUtilizationDetailCheck : ICheck
+{
+    public string Name => "GPU-Auslastung im Detail";
+    public string Category => "GPU";
+    public IReadOnlyList<Cause> Topics { get; } = new[] { Cause.GpuDriver, Cause.Thermal, Cause.Cpu };
+
+    public async Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
+    {
+        var samples = await NvidiaSmi.SampleAsync(ct);
+        if (samples.Count == 0) return Array.Empty<Finding>();
+
+        var processes = await NvidiaSmi.SampleProcessesAsync(ct);
+        var findings = new List<Finding>();
+
+        foreach (var s in samples)
+        {
+            findings.Add(BuildOverview(s, processes));
+
+            if (s.IsThrottled) findings.Add(BuildThrottleFinding(s));
+            if (s.MemoryLoadPercent is > 90) findings.Add(BuildVramFinding(s, processes));
+            if (s.IsPcieLinkDegraded) findings.Add(BuildPcieFinding(s));
+        }
+
+        return findings;
+    }
+
+    private Finding BuildOverview(GpuSample s, IReadOnlyList<GpuProcessSample> processes)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Grafikkarte:          {s.Name}");
+        sb.AppendLine($"Gesamtauslastung:     {Fmt(s.UtilizationPercent, "%")} (alle Engines zusammen, direkt vom Treiber)");
+        sb.AppendLine($"Speicher-Controller:  {Fmt(s.MemoryUtilPercent, "%")}");
+        sb.AppendLine($"Video Encode:         {Fmt(s.EncoderUtilPercent, "%")}");
+        sb.AppendLine($"Video Decode:         {Fmt(s.DecoderUtilPercent, "%")}");
+        sb.AppendLine($"Grafikspeicher:       {Fmt(s.MemoryUsedMb, "MB")} von {Fmt(s.MemoryTotalMb, "MB")} ({Fmt(s.MemoryLoadPercent, "%")})");
+        sb.AppendLine($"Takt:                 {Fmt(s.ClockMhz, "MHz")}");
+        sb.AppendLine($"Leistung:             {Fmt(s.PowerWatt, "W")} von {Fmt(s.PowerLimitWatt, "W")}");
+        sb.AppendLine($"Luefter:              {Fmt(s.FanPercent, "%")}");
+        sb.AppendLine($"PCIe-Link:            Gen{s.PcieLinkGenCurrent?.ToString() ?? "-"} x{s.PcieLinkWidthCurrent?.ToString() ?? "-"}" +
+                      (s.PcieLinkGenMax is null ? "" : $" (max Gen{s.PcieLinkGenMax} x{s.PcieLinkWidthMax})"));
+
+        if (processes.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Groesste VRAM-Verbraucher (VRAM-genau vom Treiber, nicht der unzuverlaessige Task-Manager-Prozentwert):");
+            foreach (var p in processes.Take(8))
+                sb.AppendLine($"  {p.ProcessName} (PID {p.Pid}): {p.UsedMemoryMb:0} MB");
+        }
+
+        return new Finding
+        {
+            Id = "gpu-detail-" + s.Name.GetHashCode().ToString("x"),
+            Category = Category,
+            Title = "GPU-Auslastung im Detail",
+            Severity = Severity.Info,
+            Summary = $"{s.Name}: {Fmt(s.UtilizationPercent, "%")} Gesamtlast, {Fmt(s.MemoryLoadPercent, "%")} Speicher belegt.",
+            Detail = sb.ToString().TrimEnd(),
+            Recommendation =
+                "Warum der Task-Manager oft anders anzeigt: Seine Prozentspalte je Prozess misst nur eine einzelne " +
+                "Engine (meist 3D) und rechnet Last, die auf mehrere Prozesse verteilt ist (z. B. Browser mit " +
+                "mehreren Tabs, Spiel + Aufnahmesoftware), nicht zusammen. Bei Videoaufnahme/-wiedergabe, Streaming " +
+                "oder KI-Workloads laeuft die eigentliche Arbeit oft ueber Encoder/Decoder/Copy-Engines, die in der " +
+                "Prozessliste gar nicht auftauchen. Die Gesamtauslastung oben kommt direkt vom Treiber und ist die " +
+                "verlaesslichste Zahl.",
+        };
+    }
+
+    private static Finding BuildThrottleFinding(GpuSample s)
+    {
+        var reasons = new List<string>();
+        if (s.ThrottleThermal == true) reasons.Add("Temperatur (thermische Drosselung)");
+        if (s.ThrottleHwSlowdown == true) reasons.Add("Hardware-Schutzschaltung (z. B. Spannungsspitze oder Temperatur)");
+        if (s.ThrottlePowerCap == true) reasons.Add("Leistungslimit (Power Limit erreicht)");
+
+        var thermal = s.ThrottleThermal == true || s.ThrottleHwSlowdown == true;
+
+        return new Finding
+        {
+            Id = "gpu-throttle",
+            Category = "GPU",
+            Title = "Grafikkarte drosselt gerade den Takt",
+            Severity = thermal ? Severity.Warning : Severity.Info,
+            Summary = $"Aktive Drosselungsursache: {string.Join(", ", reasons)}.",
+            Detail = $"Temperatur: {Fmt(s.TemperatureC, "°C")}, Leistung: {Fmt(s.PowerWatt, "W")} von {Fmt(s.PowerLimitWatt, "W")}.",
+            Recommendation = thermal
+                ? "Gehaeusebelueftung, Kuehlkoerper und Luefter der Grafikkarte auf Staub pruefen. Bei einer " +
+                  "custom Luefterkurve (z. B. per Afterburner) pruefen, ob sie frueh genug hochdreht. " +
+                  "Anhaltende Temperaturdrosselung verkuerzt langfristig auch die Lebensdauer."
+                : "Das Leistungslimit ist erreicht - normal unter Volllast und kein Fehler. Wer mehr Leistung " +
+                  "moechte: In der Vendor-Software (z. B. NVIDIA App, MSI Afterburner) das Power Limit anheben, " +
+                  "sofern Kuehlung und Netzteil Reserven haben.",
+            Causes = thermal
+                ? new Dictionary<Cause, double> { [Cause.Thermal] = 0.6 }
+                : new Dictionary<Cause, double>(),
+        };
+    }
+
+    private static Finding BuildVramFinding(GpuSample s, IReadOnlyList<GpuProcessSample> processes)
+    {
+        var sb = new StringBuilder();
+        if (processes.Count > 0)
+        {
+            sb.AppendLine("Groesste VRAM-Verbraucher:");
+            foreach (var p in processes.Take(8))
+                sb.AppendLine($"  {p.ProcessName} (PID {p.Pid}): {p.UsedMemoryMb:0} MB");
+        }
+
+        return new Finding
+        {
+            Id = "gpu-vram-pressure",
+            Category = "GPU",
+            Title = "Grafikspeicher fast voll",
+            Severity = Severity.Warning,
+            Summary = $"{Fmt(s.MemoryLoadPercent, "%")} des Grafikspeichers ({Fmt(s.MemoryUsedMb, "MB")} von {Fmt(s.MemoryTotalMb, "MB")}) sind belegt.",
+            Detail = sb.ToString().TrimEnd(),
+            Recommendation =
+                "Ist der Grafikspeicher voll, lagert Windows Daten in den langsameren Hauptspeicher aus - das " +
+                "macht sich als Ruckeln oder Stottern bemerkbar, auch wenn die Kernauslastung niedrig aussieht. " +
+                "Nicht benoetigte Anwendungen aus obiger Liste schliessen, in Spielen Texturqualitaet oder " +
+                "Aufloesung senken, oder bei mehreren Bildschirmen unnoetige Fenster/Browsertabs mit " +
+                "Hardwarebeschleunigung reduzieren.",
+            Causes = new Dictionary<Cause, double> { [Cause.GpuDriver] = 0.15 },
+        };
+    }
+
+    private static Finding BuildPcieFinding(GpuSample s)
+    {
+        return new Finding
+        {
+            Id = "gpu-pcie-degraded",
+            Category = "GPU",
+            Title = "PCIe-Anbindung unter dem Maximum der Karte",
+            Severity = Severity.Warning,
+            Summary = $"Aktuell Gen{s.PcieLinkGenCurrent} x{s.PcieLinkWidthCurrent}, moeglich waere Gen{s.PcieLinkGenMax} x{s.PcieLinkWidthMax}.",
+            Detail = "Ein reduzierter PCIe-Link kostet vor allem bei hohem Datentransfer (schnelle Kartenwechsel, " +
+                     "Streaming von der SSD, manche KI-Workloads) Leistung. Bei niedriger Auslastung schalten " +
+                     "manche Treiber den Link im Leerlauf bewusst herunter - das ist dann kein Fehler.",
+            Recommendation =
+                "Falls die Karte dauerhaft (auch unter Last) unter ihrem Maximum bleibt: Karte neu einsetzen " +
+                "(fest im Slot, Verriegelung eingerastet), im BIOS pruefen, ob der Slot auf die volle " +
+                "Geschwindigkeit (nicht 'Auto' mit Kompatibilitaetsmodus) eingestellt ist, und ausschliessen, " +
+                "dass ein Riser-Kabel oder ein zweites Gerät im selben Lane-Verbund die Bandbreite teilt.",
+            Causes = new Dictionary<Cause, double> { [Cause.Bios] = 0.2 },
+        };
+    }
+
+    private static string Fmt(double? v, string unit) => v is null ? "-" : $"{v.Value:0.#} {unit}";
+}

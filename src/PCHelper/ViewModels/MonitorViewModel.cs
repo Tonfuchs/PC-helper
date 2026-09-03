@@ -6,6 +6,15 @@ using PCHelper.Monitoring;
 
 namespace PCHelper.ViewModels;
 
+/// <summary>Eine Zeile in der Liste der groessten VRAM-Verbraucher.</summary>
+public sealed class GpuProcessRow
+{
+    public required string ProcessName { get; init; }
+    public required int Pid { get; init; }
+    public required double UsedMemoryMb { get; init; }
+    public string MemoryText => UsedMemoryMb >= 1024 ? $"{UsedMemoryMb / 1024:0.#} GB" : $"{UsedMemoryMb:0} MB";
+}
+
 /// <summary>Live-Ansicht der Dauerueberwachung und Verwaltung der Vorfaelle.</summary>
 public sealed class MonitorViewModel : ObservableObject
 {
@@ -62,6 +71,9 @@ public sealed class MonitorViewModel : ObservableObject
     /// <summary>Verlauf der Windows-Sitzungen (Hoch- und Herunterfahren).</summary>
     public ObservableCollection<BootSession> BootSessions { get; } = new();
 
+    /// <summary>Prozesse, die aktuell am meisten Grafikspeicher belegen (VRAM-genau statt Task-Manager-Prozent).</summary>
+    public ObservableCollection<GpuProcessRow> GpuProcesses { get; } = new();
+
     public bool IsRunning => _monitor.IsRunning;
 
     public string ToggleText => IsRunning ? "Ueberwachung anhalten" : "Ueberwachung starten";
@@ -81,6 +93,56 @@ public sealed class MonitorViewModel : ObservableObject
     public string GpuPowerText => Fmt(_monitor.Latest?.GpuPowerWatt, "W");
     public string DisplayCountText => _monitor.Latest is null ? "-" : _monitor.Latest.DisplayCount.ToString();
     public string LastSampleText => _monitor.Latest is null ? "noch keine Messung" : $"zuletzt {_monitor.Latest.TimeText}";
+
+    // --- GPU im Detail: was der Task-Manager nicht zeigt ---
+    public bool HasGpuDetail => _monitor.LatestGpu is not null;
+
+    public string GpuMemoryText
+    {
+        get
+        {
+            var g = _monitor.LatestGpu;
+            if (g is null) return "-";
+            return g.MemoryUsedMb is { } used && g.MemoryTotalMb is { } total
+                ? $"{used / 1024:0.#} / {total / 1024:0.#} GB ({g.MemoryLoadPercent:0}%)"
+                : "-";
+        }
+    }
+
+    public string GpuFanText => Fmt(_monitor.LatestGpu?.FanPercent, "%");
+    public string GpuMemoryUtilText => Fmt(_monitor.LatestGpu?.MemoryUtilPercent, "%");
+    public string GpuEncoderText => Fmt(_monitor.LatestGpu?.EncoderUtilPercent, "%");
+    public string GpuDecoderText => Fmt(_monitor.LatestGpu?.DecoderUtilPercent, "%");
+
+    public string GpuPcieText
+    {
+        get
+        {
+            var g = _monitor.LatestGpu;
+            if (g?.PcieLinkGenCurrent is null || g.PcieLinkWidthCurrent is null) return "-";
+            var text = $"Gen{g.PcieLinkGenCurrent} x{g.PcieLinkWidthCurrent}";
+            if (g.PcieLinkGenMax is { } genMax && g.PcieLinkWidthMax is { } widthMax)
+                text += $" (max Gen{genMax} x{widthMax})";
+            return text;
+        }
+    }
+
+    public bool GpuIsThrottled => _monitor.LatestGpu?.IsThrottled == true;
+
+    public string GpuThrottleText
+    {
+        get
+        {
+            var g = _monitor.LatestGpu;
+            if (g is null || !g.IsThrottled) return "";
+
+            var reasons = new List<string>();
+            if (g.ThrottlePowerCap == true) reasons.Add("Leistungslimit");
+            if (g.ThrottleThermal == true) reasons.Add("Temperatur");
+            if (g.ThrottleHwSlowdown == true) reasons.Add("Hardware-Schutz");
+            return string.Join(", ", reasons);
+        }
+    }
 
     private void Toggle()
     {
@@ -106,7 +168,26 @@ public sealed class MonitorViewModel : ObservableObject
             Raise(nameof(GpuPowerText));
             Raise(nameof(DisplayCountText));
             Raise(nameof(LastSampleText));
+
+            Raise(nameof(HasGpuDetail));
+            Raise(nameof(GpuMemoryText));
+            Raise(nameof(GpuFanText));
+            Raise(nameof(GpuMemoryUtilText));
+            Raise(nameof(GpuEncoderText));
+            Raise(nameof(GpuDecoderText));
+            Raise(nameof(GpuPcieText));
+            Raise(nameof(GpuIsThrottled));
+            Raise(nameof(GpuThrottleText));
+
+            RefreshGpuProcesses();
         });
+    }
+
+    private void RefreshGpuProcesses()
+    {
+        GpuProcesses.Clear();
+        foreach (var p in _monitor.LatestGpuProcesses.Take(6))
+            GpuProcesses.Add(new GpuProcessRow { ProcessName = p.ProcessName, Pid = p.Pid, UsedMemoryMb = p.UsedMemoryMb });
     }
 
     private void OnIncidentDetected(object? sender, Incident incident)
