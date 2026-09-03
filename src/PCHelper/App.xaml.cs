@@ -19,12 +19,14 @@ public partial class App : Application
     private MainViewModel? _vm;
     private MonitorService? _monitor;
     private Settings _settings = new();
+    private bool _isSelfTest;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         bool isSelfTest = e.Args.Any(a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase));
+        _isSelfTest = isSelfTest;
 
         // Nur eine Instanz - sonst laufen zwei Ueberwachungen parallel.
         // Der kopflose Selbsttest ist davon ausgenommen: er darf auch dann
@@ -381,10 +383,15 @@ public partial class App : Application
     {
         Log.Error("Unbehandelter Fehler in der Oberflaeche", e.Exception);
 
-        MessageBox.Show(
-            $"Es ist ein unerwarteter Fehler aufgetreten:\n\n{e.Exception.Message}\n\n" +
-            $"Details stehen in der Protokolldatei:\n{AppInfo.LogFile}",
-            AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Error);
+        // Im kopflosen Selbsttest darf hier keine Dialogbox aufgehen - die wartet
+        // sonst ohne Bedienperson auf ewig auf einen Klick und haengt den CI-Lauf auf.
+        if (!_isSelfTest)
+        {
+            MessageBox.Show(
+                $"Es ist ein unerwarteter Fehler aufgetreten:\n\n{e.Exception.Message}\n\n" +
+                $"Details stehen in der Protokolldatei:\n{AppInfo.LogFile}",
+                AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
 
         e.Handled = true;
     }

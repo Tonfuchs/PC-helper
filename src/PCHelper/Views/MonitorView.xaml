@@ -130,7 +130,7 @@
                         <TextBlock TextWrapping="Wrap">
                             <Run Text="Drosselung aktiv:" FontWeight="SemiBold" />
                             <Run Text=" " />
-                            <Run Text="{Binding Monitoring.GpuThrottleText}" />
+                            <Run Text="{Binding Monitoring.GpuThrottleText, Mode=OneWay}" />
                         </TextBlock>
                     </Border>
 
