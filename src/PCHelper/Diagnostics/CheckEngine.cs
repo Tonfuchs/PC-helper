@@ -66,6 +66,7 @@ public static class CheckEngine
         new Checks.RestartHistoryCheck(),
         new Checks.UnexpectedShutdownCheck(),
         new Checks.BugCheckCheck(),
+        new Checks.GpuHangPatternCheck(),
         new Checks.LiveKernelReportCheck(),
         new Checks.WheaCheck(),
         new Checks.MemoryConfigCheck(),

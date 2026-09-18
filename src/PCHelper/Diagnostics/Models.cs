@@ -20,6 +20,7 @@ public enum Severity
 public enum Cause
 {
     GpuDriver,
+    GpuHardware,
     DisplayLink,
     Memory,
     PowerSupply,
@@ -44,6 +45,7 @@ public static class CauseInfo
     public static string Title(Cause c) => c switch
     {
         Cause.GpuDriver => "Grafiktreiber / GPU",
+        Cause.GpuHardware => "Grafikkarte selbst (Hardware, PCIe, Stromanschluss)",
         Cause.DisplayLink => "Monitorverbindung (Kabel, DisplayPort)",
         Cause.Memory => "Arbeitsspeicher / EXPO",
         Cause.PowerSupply => "Stromversorgung / Netzteil",
@@ -67,6 +69,7 @@ public static class CauseInfo
     public static string Hint(Cause c) => c switch
     {
         Cause.GpuDriver => "Der Grafiktreiber setzt sich zurueck oder stuerzt ab. Typisch: Bild kurz weg, Ton laeuft weiter.",
+        Cause.GpuHardware => "Die Karte antwortet unter Last nicht mehr, obwohl Windows weiterlaeuft: schwacher PCIe-Link, wackelnder oder ueberlasteter 12V-Stecker, zu knappes Netzteil oder ein Defekt der Karte. Eine saubere Treiberinstallation aendert daran nichts.",
         Cause.DisplayLink => "Die Signalstrecke zum Monitor bricht ab. Typisch: Bild komplett weg, Monitor meldet 'kein Signal', Ton laeuft weiter.",
         Cause.Memory => "Speicherfehler wirken sich zufaellig aus: mal Absturz, mal Schwarzbild, mal gar nichts.",
         Cause.PowerSupply => "Die Stromversorgung bricht unter Lastspitzen ein. Typisch: Rechner geht komplett aus oder startet neu.",

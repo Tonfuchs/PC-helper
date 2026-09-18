@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using PCHelper.Monitoring;
 
 namespace PCHelper.Diagnostics.Checks;
@@ -238,8 +239,15 @@ public sealed class UnexpectedShutdownCheck : ICheck
                 "statt Daisy-Chain verwenden, den 12V-2x6-Stecker auf vollstaendiges Einrasten pruefen. " +
                 "Steckdosenleiste testweise umgehen.\n" +
                 "2) Speicher- bzw. CPU-Instabilitaet. EXPO/XMP im BIOS deaktivieren und beobachten.\n" +
-                "3) Ueberhitzung. Die Dauerueberwachung dieser App zeigt, ob es kurz davor heiss wurde.";
-            causes = new Dictionary<Cause, double> { [Cause.PowerSupply] = 0.6, [Cause.Memory] = 0.3, [Cause.Thermal] = 0.2 };
+                "3) Ueberhitzung. Die Dauerueberwachung dieser App zeigt, ob es kurz davor heiss wurde.\n\n" +
+                "Wichtig zur Unterscheidung: Lief waehrend des Ausfalls der Ton weiter (Musik, Discord-Gespraech), " +
+                "war der Rechner nicht stromlos, sondern nur die Grafikkarte haengte. Erst der erzwungene Neustart " +
+                "erzeugt dann dieses Ereignis. Das ist ein GPU-Haenger und kein Netzteilproblem - siehe den Befund " +
+                "'Muster eines GPU-Haengers'.";
+            causes = new Dictionary<Cause, double>
+            {
+                [Cause.PowerSupply] = 0.6, [Cause.Memory] = 0.3, [Cause.Thermal] = 0.2, [Cause.GpuHardware] = 0.2,
+            };
         }
         else if (byPowerButton.Count > 0)
         {
@@ -297,14 +305,29 @@ public sealed class BugCheckCheck : ICheck
     public IReadOnlyList<Cause> Topics { get; } =
         new[] { Cause.Memory, Cause.DeviceDriver, Cause.OperatingSystem, Cause.GpuDriver, Cause.Storage };
 
-    /// <summary>Ein einzelner Absturz mit Zeitpunkt und - sofern ermittelbar - Stoppcode.</summary>
-    private sealed record Crash(DateTime Time, uint? Code, string Source);
+    /// <summary>Ein einzelner Absturz mit Zeitpunkt, Stoppcode und den vier Parametern (sofern ermittelbar).</summary>
+    private sealed record Crash(DateTime Time, uint? Code, string Source, ulong[]? Params = null);
+
+    /// <summary>Anbieter der Bugcheck-Ereignisse: Der Klartextname und der Quellname, unter dem sie im Protokoll erscheinen.</summary>
+    private static readonly string[] BugcheckProviders = { "Microsoft-Windows-WER-SystemErrorReporting", "BugCheck" };
+
+    private static readonly Regex DriverName = new(@"[\w\-\.]+\.sys", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
     {
-        var bugchecks = EventLogService.Query("System",
-            EventLogService.Xpath("Microsoft-Windows-WER-SystemErrorReporting", ctx.LookbackDays, 1001),
-            100, includeData: true);
+        // 1001 = Bugcheck mit Stoppcode. 1019 nennt zusaetzlich den "moeglicherweise verknuepften Treiber".
+        var logged = EventLogService.Query("System",
+            EventLogService.XpathProviders(BugcheckProviders, ctx.LookbackDays, 1001, 1019),
+            200, includeData: true);
+        var bugchecks = logged.Where(e => e.Id == 1001).ToList();
+
+        var drivers = logged
+            .Where(e => e.Id == 1019 || e.Id == 1001)
+            .SelectMany(e => DriverName.Matches(e.Message).Select(m => m.Value.ToLowerInvariant()))
+            .GroupBy(d => d)
+            .OrderByDescending(g => g.Count())
+            .Select(g => (Name: g.Key, Count: g.Count()))
+            .ToList();
 
         var dumps = ListDumps(@"C:\Windows\Minidump", "*.dmp");
 
@@ -358,10 +381,23 @@ public sealed class BugCheckCheck : ICheck
         if (undecoded > 0)
             sb.AppendLine($"Bei {undecoded} Abstuerzen liess sich kein Stoppcode aus dem Ereignis lesen.\n");
 
+        if (drivers.Count > 0)
+        {
+            sb.AppendLine("Vom Bugcheck genannte Treiber (Ereignis 1019 bzw. 1001):");
+            foreach (var (name, count) in drivers)
+                sb.AppendLine($"  {count}x  {name}");
+            sb.AppendLine();
+        }
+
         sb.AppendLine("Einzelne Zeitpunkte (neueste zuerst):");
         foreach (var c in crashes.OrderByDescending(c => c.Time).Take(25))
+        {
             sb.AppendLine($"  {c.Time:dd.MM.yyyy HH:mm:ss}   " +
                           (c.Code is null ? "Stoppcode unbekannt" : BugCheckCodes.Describe(c.Code.Value).Display));
+
+            var param = c.Code is { } code ? BugCheckCodes.DescribeGpuHangParameters(code, c.Params) : null;
+            if (param is not null) sb.AppendLine($"        {param}");
+        }
 
         if (dumps.Count > 0)
         {
@@ -400,6 +436,15 @@ public sealed class BugCheckCheck : ICheck
             recommendation.AppendLine($"{top.Info.Meaning}");
             recommendation.AppendLine();
             recommendation.AppendLine(top.Info.Advice);
+        }
+
+        if (drivers.Count > 0 && top is not null && BugCheckCodes.IsGpuHang(top.Info.Code))
+        {
+            recommendation.AppendLine();
+            recommendation.AppendLine(
+                $"Der Bugcheck nennt den Treiber {drivers[0].Name}. Bei einem Grafiktreiber heisst das nur, dass er " +
+                "der Karte beim Haengen zugesehen hat - es beweist keinen Treiberfehler. Haengt die Karte bei jedem " +
+                "Belastungstest gleich schnell, spricht das eher fuer die Hardware (Karte, PCIe-Anbindung, Stromanschluss).");
         }
 
         if (mixed)
@@ -451,7 +496,8 @@ public sealed class BugCheckCheck : ICheck
                 e.Time,
                 BugCheckCodes.TryParseFromMessage(e.Message)
                     ?? BugCheckCodes.TryParseFromData(e.DataValue("param1")),
-                "Ereignis 1001"))
+                "Ereignis 1001",
+                BugCheckCodes.TryParseParameters(e.Message)))
             .ToList();
 
         var kernel41 = EventLogService.Query("System",
@@ -552,6 +598,207 @@ public sealed class LiveKernelReportCheck : ICheck
         };
 
         return Task.FromResult<IEnumerable<Finding>>(new[] { f });
+    }
+}
+
+/// <summary>
+/// Erkennt das Muster eines GPU-Haengers: Die Grafikkarte antwortet nicht mehr (Bild schwarz),
+/// Windows und der Ton laufen aber weiter, bis der Rechner hart ausgeschaltet wird.
+///
+/// Die Einzelbefunde (Bluescreen 0x116, Kernel-Power 41 ohne Stoppcode, Live-Kernel-Bericht) sprechen
+/// jeder fuer sich meist nur von "Treiber". Erst zusammen, ohne WHEA und ohne wiederhergestellte
+/// Treiber-Resets, zeigen sie auf die Hardware der Karte. Dieser Befund fuehrt sie zusammen und
+/// haengt die Blackbox der Ueberwachung (gpu-blackbox.csv) als Beleg an.
+/// </summary>
+public sealed class GpuHangPatternCheck : ICheck
+{
+    public string Name => "Muster eines GPU-Haengers";
+    public string Category => "Stabilitaet";
+    public IReadOnlyList<Cause> Topics { get; } =
+        new[] { Cause.GpuDriver, Cause.GpuHardware, Cause.DisplayLink, Cause.PowerSupply };
+
+    public Task<IEnumerable<Finding>> RunAsync(CheckContext ctx, CancellationToken ct)
+    {
+        var since = DateTime.Now.AddDays(-ctx.LookbackDays);
+
+        // 1) Bluescreens mit GPU-Stoppcode (0x116, 0x117, 0x141 ...).
+        var bugchecks = EventLogService.Query("System",
+            EventLogService.XpathProviders(
+                new[] { "Microsoft-Windows-WER-SystemErrorReporting", "BugCheck" }, ctx.LookbackDays, 1001),
+            100, includeData: true);
+
+        var gpuCrashes = bugchecks
+            .Where(e => (BugCheckCodes.TryParseFromMessage(e.Message)
+                         ?? BugCheckCodes.TryParseFromData(e.DataValue("param1"))) is { } c && BugCheckCodes.IsGpuHang(c))
+            .Select(e => (e.Time, Code: (BugCheckCodes.TryParseFromMessage(e.Message)
+                                        ?? BugCheckCodes.TryParseFromData(e.DataValue("param1")))!.Value,
+                          Params: BugCheckCodes.TryParseParameters(e.Message)))
+            .ToList();
+
+        // 2) Harte Ausschaltungen ohne Stoppcode: Kernel-Power 41 mit BugcheckCode 0.
+        var kernel41 = EventLogService.Query("System",
+            EventLogService.Xpath("Microsoft-Windows-Kernel-Power", ctx.LookbackDays, 41), 200, includeData: true);
+        var hardOffs = kernel41
+            .Where(e => (BugCheckCodes.TryParseFromData(e.DataValue("BugcheckCode")) ?? 0) == 0)
+            .ToList();
+
+        // 3) Wiederhergestellte Treiber-Resets (Display 4101) - die "harmlose" Variante.
+        var tdr = EventLogService.Query("System",
+            EventLogService.XpathProviders(new[] { "Display", "nvlddmkm", "amdkmdag", "amdwddmg" }, ctx.LookbackDays, 4101), 100);
+
+        // 4) Live-Kernel-Berichte der Anzeige (Watchdog).
+        var watchdog = BugCheckCheck.ListDumps(@"C:\Windows\LiveKernelReports", "*.dmp")
+            .Where(r => r.LastWriteTime >= since &&
+                        (r.FullName.Contains("WATCHDOG", StringComparison.OrdinalIgnoreCase) ||
+                         r.Name.Contains("DISPLAY", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        // 5) Hardwarefehler, die Windows selbst gemeldet bekommen hat.
+        var whea = EventLogService.Query("System",
+            EventLogService.Xpath("Microsoft-Windows-WHEA-Logger", ctx.LookbackDays), 50);
+
+        // 6) Die eigene Ueberwachung: Karte nicht mehr abfragbar, samt Blackbox-Werten.
+        var lostRows = GpuBlackbox.Read(since, DateTime.Now.AddMinutes(1))
+            .Where(r => r[12].StartsWith(GpuBlackbox.LostMarker, StringComparison.Ordinal))
+            .ToList();
+        var lostTimes = lostRows.Select(r => ParseStamp(r[0])).Where(t => t is not null).Select(t => t!.Value).ToList();
+        var lostIncidents = new IncidentStore().LoadAll(200)
+            .Where(i => i.Kind == IncidentKind.GpuUnresponsive && i.Time >= since)
+            .ToList();
+        int monitorLost = Math.Max(lostTimes.Count, lostIncidents.Count);
+
+        int degraded = CountLinkDegradedUnderLoad(since);
+
+        int evidence = (gpuCrashes.Count > 0 ? 1 : 0) + (watchdog.Count > 0 ? 1 : 0) + (monitorLost > 0 ? 1 : 0);
+
+        if (evidence == 0)
+        {
+            return Task.FromResult<IEnumerable<Finding>>(new[]
+            {
+                new Finding
+                {
+                    Id = "gpu-hang-pattern", Category = Category, Title = "Kein Muster eines GPU-Haengers",
+                    Severity = Severity.Ok,
+                    Summary = $"In den letzten {ctx.LookbackDays} Tagen gibt es weder GPU-Bluescreens noch Anzeige-Watchdog-Berichte " +
+                              "noch eine Grafikkarte, die der Ueberwachung die Antwort verweigert haette.",
+                }
+            });
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Belege in den letzten " + ctx.LookbackDays + " Tagen:");
+        sb.AppendLine($"  {gpuCrashes.Count,4}x  Bluescreen mit GPU-Stoppcode (0x116 / 0x117 / 0x141 ...)");
+        sb.AppendLine($"  {hardOffs.Count,4}x  harte Ausschaltung ohne Stoppcode (Kernel-Power 41, BugcheckCode 0)");
+        sb.AppendLine($"  {tdr.Count,4}x  wiederhergestellter Treiber-Reset (Display 4101)");
+        sb.AppendLine($"  {watchdog.Count,4}x  Live-Kernel-Bericht der Anzeige (Watchdog)");
+        sb.AppendLine($"  {monitorLost,4}x  Grafikkarte antwortete der Ueberwachung nicht mehr");
+        sb.AppendLine($"  {whea.Count,4}x  Hardwarefehler-Meldung von Windows (WHEA)");
+        if (degraded > 0)
+            sb.AppendLine($"  {degraded,4}x  PCIe-Link unter Last unter dem Maximum (gpu-blackbox.csv)");
+
+        if (gpuCrashes.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("GPU-Bluescreens (neueste zuerst):");
+            foreach (var c in gpuCrashes.OrderByDescending(c => c.Time).Take(10))
+            {
+                sb.AppendLine($"  {c.Time:dd.MM.yyyy HH:mm:ss}   {BugCheckCodes.Describe(c.Code).Display}");
+                var p = BugCheckCodes.DescribeGpuHangParameters(c.Code, c.Params);
+                if (p is not null) sb.AppendLine($"        {p}");
+            }
+        }
+
+        if (lostTimes.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(GpuBlackbox.Describe(lostTimes.Max(), 8) ?? "Blackbox ohne Werte vor dem Ausfall.");
+        }
+
+        // Bewertung: Mehrere unabhaengige Belege oder ein von der Ueberwachung selbst beobachteter Ausfall sind kritisch.
+        bool critical = evidence >= 2 || monitorLost > 0 || gpuCrashes.Count >= 2;
+
+        // Ohne WHEA-Meldung und ohne erfolgreiche Treiber-Resets bleibt die Hardware der Karte der Hauptverdacht.
+        bool driverRecovers = tdr.Count > 0 && tdr.Count >= gpuCrashes.Count;
+
+        var summary = new StringBuilder("GPU-Haenger: ");
+        var parts = new List<string>();
+        if (gpuCrashes.Count > 0) parts.Add($"{gpuCrashes.Count} GPU-Bluescreen(s)");
+        if (hardOffs.Count > 0) parts.Add($"{hardOffs.Count} harte Ausschaltung(en)");
+        if (watchdog.Count > 0) parts.Add($"{watchdog.Count} Watchdog-Bericht(e)");
+        if (monitorLost > 0) parts.Add($"{monitorLost}x Karte antwortet nicht mehr (Ueberwachung)");
+        summary.Append(string.Join(", ", parts)).Append('.');
+
+        var recommendation =
+            "Das Bild wird schwarz, Windows und der Ton laufen aber weiter: Die Grafikkarte haengt, der Rechner selbst nicht. " +
+            "Ein Grafiktreiber, der dabei im Bluescreen genannt wird, hat der Karte nur beim Haengen zugesehen. " +
+            (driverRecovers
+                ? "Da Windows den Treiber mehrfach erfolgreich zuruecksetzen konnte, ist ein Treiberproblem hier durchaus moeglich.\n\n"
+                : "Da der Treiber nicht wieder auf die Beine kommt und keine Hardwarefehler gemeldet werden, ist die Karte selbst " +
+                  "(oder ihre PCIe-Anbindung bzw. Stromversorgung) der Hauptverdacht.\n\n") +
+            "Vorgehen in dieser Reihenfolge - nach jedem Schritt mit demselben Belastungstest pruefen:\n\n" +
+            "1) PCIe-Geschwindigkeit im BIOS fuer den Grafikkartenslot fest auf Gen 4 stellen (nicht 'Auto'). " +
+            "Bei einer PCIe-5.0-Karte an einer neuen Plattform ist das die haeufigste Loesung.\n" +
+            "2) Leistungsgrenze der Karte auf 60-70 % senken (MSI Afterburner oder 'nvidia-smi -pl'). " +
+            "Haengt sie dann nicht mehr, ist Stromversorgung oder Netzteil die Spur.\n" +
+            "3) Den 12V-2x6-Stecker der Karte abziehen und neu einstecken, bis er hoerbar und ohne Spalt einrastet. " +
+            "Stecker auf Verfaerbung oder Schmelzspuren pruefen. Nur ein eigenes Kabel des Netzteils verwenden, keinen Adapter mit Verlaengerung.\n" +
+            "4) Die Karte in einen anderen Rechner oder eine andere Karte in diesen Rechner setzen. " +
+            "Haengt dieselbe Karte im anderen Rechner, ist sie defekt - dann Garantie/Umtausch mit diesem Bericht.\n" +
+            "5) Erst danach den Treiber mit DDU neu installieren. Als erste und einzige Massnahme reicht das bei diesem Muster nicht.\n\n" +
+            "Die Datei gpu-blackbox.csv (Ordner der Anwendungsdaten) enthaelt Takt, Leistung, Temperatur und PCIe-Link " +
+            "sekundengenau bis zum Ausfall. Faellt der PCIe-Link vor dem Haenger ab oder springt die Leistung auf das Limit, " +
+            "zeigt das, welcher der Schritte oben zuerst dran ist.";
+
+        var causes = new Dictionary<Cause, double>
+        {
+            [Cause.GpuHardware] = driverRecovers ? 0.5 : 0.8,
+            [Cause.PowerSupply] = 0.3,
+            [Cause.GpuDriver] = driverRecovers ? 0.5 : 0.3,
+            [Cause.Bios] = 0.2,
+        };
+
+        var times = gpuCrashes.Select(c => c.Time).Concat(lostTimes).Concat(watchdog.Select(w => w.LastWriteTime)).ToList();
+
+        var f = new Finding
+        {
+            Id = "gpu-hang-pattern",
+            Category = Category,
+            Title = "Muster eines GPU-Haengers",
+            Severity = critical ? Severity.Critical : Severity.Warning,
+            Summary = summary.ToString(),
+            Detail = sb.ToString().TrimEnd(),
+            Occurrences = Math.Max(gpuCrashes.Count + watchdog.Count + monitorLost, 1),
+            LastOccurrence = times.Count > 0 ? times.Max() : hardOffs.Count > 0 ? hardOffs.Max(e => e.Time) : null,
+            Recommendation = recommendation,
+            Causes = causes,
+        };
+
+        return Task.FromResult<IEnumerable<Finding>>(new[] { f });
+    }
+
+    private static DateTime? ParseStamp(string s)
+        => DateTime.TryParseExact(s, "yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var t) ? t : null;
+
+    /// <summary>Messpunkte unter hoher Last, bei denen der PCIe-Link unter seinem Maximum lief.</summary>
+    private static int CountLinkDegradedUnderLoad(DateTime since)
+    {
+        int count = 0;
+        foreach (var r in GpuBlackbox.Read(since, DateTime.Now.AddMinutes(1)))
+        {
+            if (r[12].Length > 0) continue;
+            if (!double.TryParse(r[1], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var load) || load < 50) continue;
+
+            if (Degraded(r[7]) || Degraded(r[8])) count++;
+        }
+        return count;
+
+        static bool Degraded(string pair)
+        {
+            var p = pair.Split('/');
+            return p.Length == 2 && int.TryParse(p[0], out var now) && int.TryParse(p[1], out var max) && now < max;
+        }
     }
 }
 

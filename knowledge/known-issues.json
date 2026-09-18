@@ -18,6 +18,21 @@
       ]
     },
     {
+      "id": "kb-nvidia-50-hang-under-load",
+      "title": "GeForce RTX 50: Schwarzbild unter Last, Ton laeuft weiter",
+      "category": "Grafik",
+      "severity": "info",
+      "match": { "gpuNameContains": ["RTX 50"] },
+      "symptomIds": ["display-black-random", "game-crash"],
+      "summary": "Wenn das Bild bei einer RTX 50 innerhalb von Sekunden unter Volllast (Spiel, FurMark) schwarz wird, waehrend der Ton weiterlaeuft, haengt die Karte selbst - unabhaengig vom Kabel und vom Monitor.",
+      "detail": "Typisches Fehlerbild: Bluescreen 0x116 (VIDEO_TDR_FAILURE) mit nvlddmkm.sys oder ganz ohne Bluescreen - dann ein harter Neustart per Netzschalter (Kernel-Power 41 mit BugcheckCode 0). Es gibt keine Display-4101-Ereignisse, weil der Treiber sich nicht mehr erholt, und keine WHEA-Meldungen. Die Ursache liegt dann in der Karte, ihrer PCIe-Anbindung (PCIe 5.0 an neuen Boards) oder der Stromversorgung ueber den 12V-2x6-Stecker.\n\nEin Fehler, der sich mit einem Belastungstest innerhalb weniger Sekunden reproduzieren laesst, ist mit sehr hoher Wahrscheinlichkeit kein Softwareproblem.",
+      "recommendation": "1) Im BIOS den PCIe-Slot der Grafikkarte fest auf Gen 4 stellen und den Test wiederholen.\n2) Leistungsgrenze auf 60-70 % senken und erneut testen.\n3) 12V-2x6-Stecker abziehen, auf Schmelzspuren pruefen, neu einstecken bis er ohne Spalt einrastet.\n4) Karte in einem anderen Rechner testen. Haengt sie auch dort, ist sie defekt: Garantie/Umtausch.\n5) Erst zuletzt den Treiber mit DDU neu installieren.",
+      "causes": { "GpuHardware": 0.7, "PowerSupply": 0.3 },
+      "links": [
+        { "label": "NVIDIA Treiber & Tools", "url": "https://www.nvidia.com/de-de/geforce/drivers/" }
+      ]
+    },
+    {
       "id": "kb-ddr5-expo-instability",
       "title": "DDR5 mit EXPO/XMP: haeufigste Quelle sporadischer Instabilitaet",
       "category": "Arbeitsspeicher",

@@ -169,6 +169,24 @@ public static class PdfReportBuilder
                               rows, new double[] { 1.1, 1, 1, 1, 1, 1, 1.1 });
                 }
 
+                var gpuRows = GpuBlackbox.Read(incident.Time.AddMinutes(-3), incident.Time.AddMinutes(1));
+                if (gpuRows.Count > 0)
+                {
+                    pdf.Paragraph("GPU-Blackbox: letzte Sekundenwerte der Grafikkarte", muted: true, size: 8.6, indent: 10);
+                    var gpuTable = gpuRows.TakeLast(20)
+                        .Select(r => r[12].Length > 0
+                            ? new[] { r[0].Length >= 19 ? r[0][11..] : r[0], "-", "-", "-", "-", "-", r[12] }
+                            : new[]
+                            {
+                                r[0].Length >= 19 ? r[0][11..] : r[0], r[1], r[2], r[3], r[5],
+                                $"{r[7]} x{r[8]}", r[9],
+                            })
+                        .ToList();
+
+                    pdf.Table(new[] { "Zeit", "Last %", "GPU C", "GPU W", "MHz", "PCIe", "Drosselung / Hinweis" },
+                              gpuTable, new double[] { 1.1, 0.9, 0.9, 0.9, 1, 1.3, 2.4 });
+                }
+
                 pdf.Space(4);
             }
         }

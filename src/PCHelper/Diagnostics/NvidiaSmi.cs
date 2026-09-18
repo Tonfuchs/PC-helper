@@ -83,13 +83,25 @@ public static class NvidiaSmi
         "clocks_throttle_reasons.sw_power_cap,clocks_throttle_reasons.thermal," +
         "clocks_throttle_reasons.hw_slowdown";
 
+    /// <summary>
+    /// Fehlertext des letzten fehlgeschlagenen Abrufs (z. B. "Unable to determine the device handle ...",
+    /// wenn die Karte nicht mehr antwortet), null nach einem erfolgreichen Abruf.
+    /// </summary>
+    public static string? LastError { get; private set; }
+
     /// <summary>Liest die aktuellen Werte aller NVIDIA-GPUs. Leere Liste, wenn nicht verfuegbar.</summary>
     public static async Task<IReadOnlyList<GpuSample>> SampleAsync(CancellationToken ct = default)
     {
         if (Path is null) return Array.Empty<GpuSample>();
 
         var r = await Shell.RunAsync(Path, $"--query-gpu={QueryFields} --format=csv,noheader,nounits", 10_000, ct);
-        if (!r.Success) return Array.Empty<GpuSample>();
+        if (!r.Success)
+        {
+            var text = r.Combined.Trim();
+            LastError = text.Length == 0 ? $"nvidia-smi endete mit Exitcode {r.ExitCode}" : text;
+            return Array.Empty<GpuSample>();
+        }
+        LastError = null;
 
         var samples = new List<GpuSample>();
         foreach (var line in r.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))

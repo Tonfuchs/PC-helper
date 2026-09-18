@@ -78,7 +78,7 @@ public static class SymptomCatalog
             },
             Causes = new Dictionary<Cause, double>
             {
-                [Cause.DisplayLink] = 1.0, [Cause.GpuDriver] = 0.9, [Cause.PowerSettings] = 0.6,
+                [Cause.DisplayLink] = 1.0, [Cause.GpuDriver] = 0.9, [Cause.GpuHardware] = 0.8, [Cause.PowerSettings] = 0.6,
                 [Cause.Memory] = 0.4, [Cause.PowerSupply] = 0.4, [Cause.Software] = 0.3, [Cause.Thermal] = 0.3,
             },
             FirstSteps = new[]
@@ -490,8 +490,8 @@ public static class SymptomCatalog
             },
             Causes = new Dictionary<Cause, double>
             {
-                [Cause.GpuDriver] = 1.0, [Cause.Software] = 0.7, [Cause.Thermal] = 0.6, [Cause.PowerSupply] = 0.5,
-                [Cause.Memory] = 0.5, [Cause.Cpu] = 0.4,
+                [Cause.GpuDriver] = 1.0, [Cause.GpuHardware] = 0.8, [Cause.Software] = 0.7, [Cause.Thermal] = 0.6,
+                [Cause.PowerSupply] = 0.5, [Cause.Memory] = 0.5, [Cause.Cpu] = 0.4,
             },
             FirstSteps = new[]
             {

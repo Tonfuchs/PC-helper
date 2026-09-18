@@ -187,7 +187,21 @@ public static class ReportBuilder
                     sb.AppendLine("</table></details>");
                 }
 
-                var around = EventLogService.Around("System", incident.Time, TimeSpan.FromMinutes(5), 40);
+                var gpuRows = GpuBlackbox.Read(incident.Time.AddMinutes(-3), incident.Time.AddMinutes(1));
+                if (gpuRows.Count > 0)
+                {
+                    sb.AppendLine("<details open><summary>GPU-Blackbox: Sekundenwerte der Grafikkarte davor</summary>");
+                    sb.AppendLine("<table class=\"data\"><tr><th>Zeit</th><th>Last %</th><th>°C</th><th>W</th><th>Limit W</th><th>Takt MHz</th><th>VRAM MB</th><th>PCIe Gen</th><th>PCIe Breite</th><th>Drosselung</th><th>Hinweis</th></tr>");
+                    foreach (var r in gpuRows.TakeLast(40))
+                    {
+                        sb.AppendLine($"<tr><td>{E(r[0].Length >= 19 ? r[0][11..] : r[0])}</td><td>{E(r[1])}</td><td>{E(r[2])}</td><td>{E(r[3])}</td>" +
+                                      $"<td>{E(r[4])}</td><td>{E(r[5])}</td><td>{E(r[6])}</td><td>{E(r[7])}</td><td>{E(r[8])}</td>" +
+                                      $"<td>{E(r[9])}</td><td>{E(r[12])}</td></tr>");
+                    }
+                    sb.AppendLine("</table></details>");
+                }
+
+                var around =EventLogService.Around("System", incident.Time, TimeSpan.FromMinutes(5), 40);
                 if (around.Count > 0)
                 {
                     sb.AppendLine("<details><summary>Ereignisprotokoll rund um den Vorfall</summary><pre>");

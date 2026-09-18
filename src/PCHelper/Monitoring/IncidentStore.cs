@@ -19,6 +19,8 @@ public enum IncidentKind
     SystemShutdown,
     /// <summary>Ein Neustart, den der Nutzer als Folge eines Schwarzbildes bestaetigt hat.</summary>
     BlackscreenRestart,
+    /// <summary>Die Grafikkarte antwortet nicht mehr, Windows laeuft aber weiter (GPU-Haenger).</summary>
+    GpuUnresponsive,
 }
 
 /// <summary>Ein festgehaltener Vorfall samt Zeitpunkt und Kurzbeschreibung.</summary>
@@ -41,6 +43,7 @@ public sealed class Incident
         IncidentKind.PowerResume => "Aufwachen aus Energiesparmodus",
         IncidentKind.SystemShutdown => "Neustart / Herunterfahren",
         IncidentKind.BlackscreenRestart => "Neustart wegen Schwarzbild",
+        IncidentKind.GpuUnresponsive => "Grafikkarte antwortet nicht mehr",
         _ => Kind.ToString()
     };
 

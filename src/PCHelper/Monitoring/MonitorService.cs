@@ -38,6 +38,16 @@ public sealed class MonitorService : IDisposable
     /// <summary>Alle wie oft Messzyklen die (teurere) Liste der VRAM-Prozesse neu abgefragt wird.</summary>
     private const int GpuProcessSampleEveryNCycles = 5;
 
+    /// <summary>Ab dieser GPU-Auslastung wird jede Sekunde gemessen (ein GPU-Ausfall kommt oft nach wenigen Sekunden Last).</summary>
+    private const double GpuBusyPercent = 50;
+
+    // Erkennung einer nicht mehr antwortenden Karte: nvidia-smi liefert Werte, dann ploetzlich nicht mehr.
+    private const int GpuFailuresBeforeIncident = 2;
+    private bool _gpuEverSampled;
+    private int _gpuFailStreak;
+    private DateTime _gpuFirstFailure;
+    private bool _gpuLostReported;
+
     public MonitorService(Settings settings, IncidentStore incidents)
     {
         _settings = settings;
@@ -116,10 +126,22 @@ public sealed class MonitorService : IDisposable
 
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(_settings.SampleIntervalSeconds, 2, 120)), ct);
+                await Task.Delay(TimeSpan.FromSeconds(NextDelaySeconds()), ct);
             }
             catch (OperationCanceledException) { break; }
         }
+    }
+
+    /// <summary>
+    /// Normalerweise das eingestellte Intervall. Unter hoher GPU-Last oder bei einer nicht mehr
+    /// antwortenden Karte jede Sekunde - genau dann entscheidet sich, ob nach einem Ausfall
+    /// noch aussagekraeftige Werte auf der Platte liegen.
+    /// </summary>
+    private int NextDelaySeconds()
+    {
+        var configured = Math.Clamp(_settings.SampleIntervalSeconds, 2, 120);
+        bool busy = Latest?.GpuUtilPercent is >= GpuBusyPercent;
+        return busy || _gpuFailStreak > 0 ? 1 : configured;
     }
 
     private async Task<TelemetrySample> CollectAsync(CancellationToken ct)
@@ -152,6 +174,10 @@ public sealed class MonitorService : IDisposable
             sample.GpuState = g.PerformanceState;
             LatestGpu = g;
 
+            GpuBlackbox.Append(sample.Time, g);
+            HandleGpuRecovered(sample);
+            _gpuEverSampled = true;
+
             // Die Liste der VRAM-Prozesse ist ein eigener nvidia-smi-Aufruf und aendert
             // sich langsamer als die Sensorik - seltener abfragen spart Prozessstarts.
             if (_gpuProcessCycle++ % GpuProcessSampleEveryNCycles == 0)
@@ -160,10 +186,66 @@ public sealed class MonitorService : IDisposable
         else
         {
             LatestGpu = null;
+            HandleGpuFailure(sample);
         }
 
         DetectDisplayChange(sample, signature, displays.Count);
         return sample;
+    }
+
+    /// <summary>
+    /// nvidia-smi lieferte zuvor Werte und jetzt nicht mehr: Die Karte antwortet nicht mehr,
+    /// waehrend Windows und diese Anwendung weiterlaufen. Das ist der GPU-Haenger.
+    /// Ein einzelner Fehlversuch zaehlt nicht (nvidia-smi kann unter Last auch einmal zu spaet antworten).
+    /// </summary>
+    private void HandleGpuFailure(TelemetrySample sample)
+    {
+        // Ohne vorherigen Erfolg (kein NVIDIA-Treiber, kein nvidia-smi) gibt es nichts zu melden.
+        if (!_gpuEverSampled || !NvidiaSmi.IsAvailable) return;
+
+        if (_gpuFailStreak++ == 0) _gpuFirstFailure = sample.Time;
+        if (_gpuFailStreak < GpuFailuresBeforeIncident || _gpuLostReported) return;
+
+        _gpuLostReported = true;
+        var error = NvidiaSmi.LastError;
+        sample.Event = "Grafikkarte antwortet nicht mehr";
+
+        GpuBlackbox.AppendNote(_gpuFirstFailure, GpuBlackbox.LostMarker, error);
+
+        var lastGpu = GpuBlackbox.Describe(_gpuFirstFailure, 6);
+        var note =
+            "Die Grafikkarte antwortet nicht mehr auf Abfragen, waehrend Windows und diese Anwendung weiterlaufen. " +
+            "Das ist ein Haenger der GPU selbst (Bild schwarz, Ton und Netzwerk laufen weiter) - kein Ausfall des ganzen Rechners.\n\n" +
+            $"Erster fehlgeschlagener Abruf: {_gpuFirstFailure:dd.MM.yyyy HH:mm:ss}\n" +
+            $"Meldung von nvidia-smi: {(string.IsNullOrWhiteSpace(error) ? "-" : Trim(error, 400))}" +
+            (lastGpu is null ? "" : "\n\n" + lastGpu);
+
+        SessionLog.AppendNote("Grafikkarte antwortet nicht mehr", note);
+
+        var incident = _incidents.Add(IncidentKind.GpuUnresponsive, "Grafikkarte antwortet nicht mehr", note, time: _gpuFirstFailure);
+        IncidentDetected?.Invoke(this, incident);
+    }
+
+    private void HandleGpuRecovered(TelemetrySample sample)
+    {
+        if (_gpuFailStreak == 0) return;
+
+        if (_gpuLostReported)
+        {
+            GpuBlackbox.AppendNote(sample.Time, GpuBlackbox.BackMarker);
+            SessionLog.AppendNote("Grafikkarte antwortet wieder",
+                $"Ausfall seit {_gpuFirstFailure:HH:mm:ss}, Dauer {(sample.Time - _gpuFirstFailure).TotalSeconds:0} s.");
+            sample.Event = "Grafikkarte antwortet wieder";
+        }
+
+        _gpuFailStreak = 0;
+        _gpuLostReported = false;
+    }
+
+    private static string Trim(string s, int max)
+    {
+        var flat = s.Replace("\r", " ").Replace("\n", " ").Trim();
+        return flat.Length > max ? flat[..max] + " ..." : flat;
     }
 
     /// <summary>
@@ -325,6 +407,10 @@ public sealed class MonitorService : IDisposable
                     // Kurze Luecken (z. B. Abmelden) nicht als Ausfall werten.
                     if ((DateTime.Now - last).TotalMinutes >= 1)
                     {
+                        // Die Blackbox der GPU liegt auch nach hartem Ausfall auf der Platte.
+                        var gpuTail = rebooted ? GpuBlackbox.Describe(last, 6) : null;
+                        if (gpuTail is not null) SessionLog.AppendNote("GPU-Werte vor dem unsauberen Sitzungsende", gpuTail);
+
                         result = store.Add(
                             IncidentKind.UncleanShutdown,
                             rebooted
@@ -334,7 +420,8 @@ public sealed class MonitorService : IDisposable
                                 ? $"Letztes Lebenszeichen der Ueberwachung: {last:dd.MM.yyyy HH:mm:ss}.\n" +
                                   $"Windows startete danach um {bootTime:dd.MM.yyyy HH:mm:ss} neu.\n\n" +
                                   "Das ist der Zeitpunkt, an dem der Rechner ausgefallen ist. Die Messwerte " +
-                                  "unmittelbar davor stehen im Bericht zu diesem Vorfall."
+                                  "unmittelbar davor stehen im Bericht zu diesem Vorfall." +
+                                  (gpuTail is null ? "" : "\n\n" + gpuTail)
                                 : $"Letztes Lebenszeichen: {last:dd.MM.yyyy HH:mm:ss}. " +
                                   "Windows lief durch - vermutlich wurde nur das Programm beendet.",
                             time: last);

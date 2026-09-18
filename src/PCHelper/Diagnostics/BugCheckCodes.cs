@@ -28,6 +28,13 @@ public static class BugCheckCodes
     private static readonly Dictionary<Cause, double> MemoryOrDriver = new() { [Cause.Memory] = 0.5, [Cause.Software] = 0.4 };
     private static readonly Dictionary<Cause, double> Driver = new() { [Cause.Software] = 0.7, [Cause.OperatingSystem] = 0.2 };
     private static readonly Dictionary<Cause, double> Graphics = new() { [Cause.GpuDriver] = 0.8, [Cause.DisplayLink] = 0.2 };
+    // GPU-Haenger: Der Stoppcode allein trennt Treiber und Hardware nicht. Bleibt der Fehler nach einer
+    // sauberen Treiberinstallation bestehen, ist die Karte bzw. ihre Anbindung der Hauptverdaechtige.
+    private static readonly Dictionary<Cause, double> GpuHang = new()
+    {
+        [Cause.GpuDriver] = 0.5, [Cause.GpuHardware] = 0.5, [Cause.PowerSupply] = 0.15, [Cause.DisplayLink] = 0.1,
+    };
+
     private static readonly Dictionary<Cause, double> Hardware = new() { [Cause.Memory] = 0.4, [Cause.Bios] = 0.3, [Cause.PowerSupply] = 0.2, [Cause.Thermal] = 0.2 };
     private static readonly Dictionary<Cause, double> Storage = new() { [Cause.Storage] = 0.7 };
     private static readonly Dictionary<Cause, double> System = new() { [Cause.OperatingSystem] = 0.6, [Cause.Storage] = 0.2 };
@@ -43,6 +50,17 @@ public static class BugCheckCodes
     private const string AdviceGraphics =
         "Grafikkarte oder Grafiktreiber. Treiber mit DDU vollstaendig entfernen und neu installieren, " +
         "jegliche GPU-Uebertaktung zuruecknehmen, Overlay-Software beenden.";
+
+    private const string AdviceGpuHang =
+        "Die Grafikkarte hat nicht mehr geantwortet und Windows konnte sie nicht zuruecksetzen. Der Stoppcode " +
+        "sagt nicht, ob Treiber oder Hardware schuld ist. Reihenfolge:\n" +
+        "1) Treiber einmal sauber neu installieren (DDU im abgesicherten Modus). Aendert sich nichts, ist der Treiber es nicht.\n" +
+        "2) Im BIOS den PCIe-Steckplatz der Grafikkarte fest auf Gen 4 stellen (statt Auto). Bei aktuellen Karten " +
+        "und AM5-Boards ist die PCIe-5.0-Strecke eine haeufige Ursache.\n" +
+        "3) Belastungstest (z. B. FurMark) mit Power Limit 60-70 % wiederholen. Haelt es dann durch, liegt es an " +
+        "Stromzufuhr oder Boost-Takt.\n" +
+        "4) 12V-2x6-Stecker neu setzen und auf Verfaerbung pruefen, Netzteilleistung pruefen.\n" +
+        "5) Karte in einem anderen Rechner testen. Stuerzt sie dort ebenfalls ab, ist sie defekt (Garantiefall).";
 
     private const string AdviceHardware =
         "Die Hardware selbst meldet einen Fehler. Fast immer: Uebertaktung (EXPO, Curve Optimizer, PBO) " +
@@ -72,7 +90,7 @@ public static class BugCheckCodes
         new(0x000000C2, "BAD_POOL_CALLER", "Ein Treiber hat Speicher falsch angefordert oder freigegeben.", AdviceDriver, Driver),
         new(0x000000C5, "DRIVER_CORRUPTED_EXPOOL", "Ein Treiber hat den Systemspeicher beschaedigt.", AdviceDriver, MemoryOrDriver),
         new(0x000000D1, "DRIVER_IRQL_NOT_LESS_OR_EQUAL", "Ein Treiber hat auf ungueltigen Speicher zugegriffen.", AdviceDriver, Driver),
-        new(0x000000EA, "THREAD_STUCK_IN_DEVICE_DRIVER", "Der Grafiktreiber hat sich festgefahren.", AdviceGraphics, Graphics),
+        new(0x000000EA, "THREAD_STUCK_IN_DEVICE_DRIVER", "Der Grafiktreiber hat sich festgefahren.", AdviceGpuHang, GpuHang),
         new(0x000000EF, "CRITICAL_PROCESS_DIED", "Ein lebenswichtiger Windows-Prozess wurde beendet.", "Systemdateien pruefen (DISM und sfc). Haeufig Folge beschaedigter Systemdateien.", System),
         new(0x000000F4, "CRITICAL_OBJECT_TERMINATION", "Ein lebenswichtiger Systemprozess wurde unerwartet beendet.", "Systemdateien und Datentraeger pruefen.", System),
         new(0x000000F7, "DRIVER_OVERRAN_STACK_BUFFER", "Ein Treiber hat seinen Speicherbereich ueberschrieben.", AdviceDriver, Driver),
@@ -81,12 +99,13 @@ public static class BugCheckCodes
         new(0x00000109, "CRITICAL_STRUCTURE_CORRUPTION", "Kritische Kernel-Strukturen wurden veraendert.", AdviceHardware, Hardware),
         new(0x0000010E, "VIDEO_MEMORY_MANAGEMENT_INTERNAL", "Fehler in der Speicherverwaltung der Grafikkarte.", AdviceGraphics, Graphics),
         new(0x00000113, "VIDEO_DXGKRNL_FATAL_ERROR", "Schwerwiegender Fehler im Grafik-Subsystem.", AdviceGraphics, Graphics),
-        new(0x00000116, "VIDEO_TDR_FAILURE", "Der Grafiktreiber liess sich nach einem Haenger nicht zuruecksetzen.", AdviceGraphics, Graphics),
-        new(0x00000117, "VIDEO_TDR_TIMEOUT_DETECTED", "Der Grafiktreiber hat nicht rechtzeitig geantwortet.", AdviceGraphics, Graphics),
+        new(0x00000116, "VIDEO_TDR_FAILURE", "Der Grafiktreiber liess sich nach einem Haenger nicht zuruecksetzen.", AdviceGpuHang, GpuHang),
+        new(0x00000117, "VIDEO_TDR_TIMEOUT_DETECTED", "Der Grafiktreiber hat nicht rechtzeitig geantwortet.", AdviceGpuHang, GpuHang),
         new(0x00000119, "VIDEO_SCHEDULER_INTERNAL_ERROR", "Fehler im Ablaufplaner der Grafikkarte.", AdviceGraphics, Graphics),
         new(0x00000124, "WHEA_UNCORRECTABLE_ERROR", "Die Hardware meldet einen nicht korrigierbaren Fehler.", AdviceHardware, Hardware),
         new(0x00000133, "DPC_WATCHDOG_VIOLATION", "Ein Treiber hat den Prozessor zu lange belegt.", "Haeufig Speicher- oder Chipsatztreiber. Chipsatztreiber und SSD-Firmware aktualisieren.", new Dictionary<Cause, double> { [Cause.Software] = 0.5, [Cause.Storage] = 0.3, [Cause.Bios] = 0.2 }),
         new(0x00000139, "KERNEL_SECURITY_CHECK_FAILURE", "Eine Sicherheitspruefung im Kernel ist fehlgeschlagen.", AdviceDriver, MemoryOrDriver),
+        new(0x00000141, "VIDEO_ENGINE_TIMEOUT_DETECTED", "Eine Engine der Grafikkarte hat nicht rechtzeitig geantwortet, die Wiederherstellung schlug fehl.", AdviceGpuHang, GpuHang),
         new(0x00000144, "BUGCODE_USB3_DRIVER", "Fehler im USB-3-Treiber.", "USB-Geraete einzeln abziehen, um den Verursacher zu finden. Chipsatztreiber aktualisieren.", Driver),
         new(0x0000014F, "PDC_WATCHDOG_TIMEOUT", "Eine Komponente hat den Energiezustandswechsel blockiert.", "Schnellstart und Energiesparmodus testweise deaktivieren.", new Dictionary<Cause, double> { [Cause.PowerSettings] = 0.5, [Cause.Software] = 0.3 }),
         new(0x00000154, "UNEXPECTED_STORE_EXCEPTION", "Fehler beim komprimierten Speicher.", AdviceMemory, MemoryOrDriver),
@@ -127,6 +146,54 @@ public static class BugCheckCodes
         if (!match.Success) return null;
         return uint.TryParse(match.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v)
             ? v : null;
+    }
+
+    /// <summary>Stoppcodes, hinter denen ein haengender Grafikprozessor steckt (Treiber-Reset gescheitert).</summary>
+    public static bool IsGpuHang(uint code) => (code & 0xFFFF) is 0x116 or 0x117 or 0x141 or 0xEA or 0x119;
+
+    private static readonly Regex ParameterList = new(
+        @"\(\s*(?<a>0x[0-9a-fA-F]+)\s*,\s*(?<b>0x[0-9a-fA-F]+)\s*,\s*(?<c>0x[0-9a-fA-F]+)\s*,\s*(?<d>0x[0-9a-fA-F]+)\s*\)",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// Liest die vier Parameter aus dem Text von Ereignis 1001
+    /// ("... 0x00000116 (0x..., 0x..., 0x..., 0x...)"). Null, wenn nicht vorhanden.
+    /// </summary>
+    public static ulong[]? TryParseParameters(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return null;
+        var m = ParameterList.Match(message);
+        if (!m.Success) return null;
+
+        var result = new ulong[4];
+        for (int i = 0; i < 4; i++)
+        {
+            var text = m.Groups["abcd"[i].ToString()].Value[2..];
+            if (!ulong.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out result[i])) return null;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Bei GPU-Haengern steht in Parameter 3 der NTSTATUS des zuletzt fehlgeschlagenen Vorgangs.
+    /// Liefert eine Klartextzeile oder null, wenn nichts Sinnvolles zu sagen ist.
+    /// </summary>
+    public static string? DescribeGpuHangParameters(uint code, ulong[]? p)
+    {
+        if (p is null || !IsGpuHang(code)) return null;
+
+        var status = (uint)(p[2] & 0xFFFFFFFF);
+        var name = status switch
+        {
+            0xC000009A => "STATUS_INSUFFICIENT_RESOURCES - der Reset der Karte konnte nicht abgeschlossen werden",
+            0xC0000005 => "STATUS_ACCESS_VIOLATION",
+            0xC000001D => "STATUS_ILLEGAL_INSTRUCTION",
+            _ => null,
+        };
+
+        return name is null
+            ? $"Parameter 3: 0x{status:X8}"
+            : $"Parameter 3: 0x{status:X8} ({name})";
     }
 
     /// <summary>Wandelt einen Dezimalwert aus den Ereignisdaten (z. B. BugcheckCode) in einen Stoppcode.</summary>

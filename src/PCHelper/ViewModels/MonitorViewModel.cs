@@ -79,7 +79,7 @@ public sealed class MonitorViewModel : ObservableObject
     public string ToggleText => IsRunning ? "Ueberwachung anhalten" : "Ueberwachung starten";
 
     public string StateText => IsRunning
-        ? $"Aktiv - es wird alle {_settings.SampleIntervalSeconds} Sekunden gemessen."
+        ? $"Aktiv - es wird alle {_settings.SampleIntervalSeconds} Sekunden gemessen, bei hoher GPU-Last jede Sekunde."
         : "Angehalten - es werden keine Messwerte aufgezeichnet.";
 
     public string Note { get => _note; set => Set(ref _note, value); }
