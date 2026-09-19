@@ -35,6 +35,18 @@ public sealed class Settings
     /// <summary>Fenster beim automatischen Start (Autostart) verbergen.</summary>
     public bool StartMinimized { get; set; }
 
+    /// <summary>
+    /// Schluessel der Wartungspunkte, die als bewusste Entscheidung markiert wurden ("Ist Absicht").
+    /// Sie zaehlen nicht mehr als Problem und stehen unten in der Liste.
+    /// </summary>
+    public List<string> IntentionalItems { get; set; } = new();
+
+    /// <summary>
+    /// Dienste, die ueber die Wartung auf "Manuell" gestellt wurden. Nur so laesst sich die Aenderung
+    /// spaeter wieder anbieten: ein Dienst auf "Manuell" taucht sonst in keiner Liste mehr auf.
+    /// </summary>
+    public List<string> ManualizedServices { get; set; } = new();
+
     public DateTime? LastUpdateCheckUtc { get; set; }
     public string? SkippedVersion { get; set; }
 

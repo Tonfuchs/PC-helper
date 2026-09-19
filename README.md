@@ -140,9 +140,21 @@ Alles zusammen landet im Bericht und fließt in die Prüfung *Neustart-Verlauf* 
 - **Netzwerk**: Adapterzustand, IP-Konfiguration, DHCP-Ausfall (169.254er-Adresse), zu langsam
   ausgehandelte Kabelverbindungen – dazu ein Erreichbarkeitstest, der **Router, Internet und
   Namensauflösung getrennt** prüft. Erst diese Dreiteilung sagt, wo die Kette reißt.
+- **Der Weg ins Internet**: Läuft ein VPN, und wenn ja, was kostet der Umweg? Router, VPN-Einstieg und
+  Internet werden getrennt gemessen – daran sieht man, ob die Bremse im Haus sitzt, beim VPN oder
+  beim Anbieter. Dazu die **Ladezeit eines einzelnen kleinen Abrufs** (das Gefühl „die Seite lädt
+  ewig“, obwohl die Leitung schnell ist) und das **Tempo der Namensauflösung** einschließlich Vergleich
+  mit anderen Namensservern.
+- **Netzwerkeinstellungen, die bremsen**: eingetragener Proxy, automatische Proxy-Suche, Umleitungen in
+  der `hosts`-Datei, verstelltes TCP-Empfangsfenster, Kabel und WLAN gleichzeitig, Netzwerkkarten-
+  Karteileichen.
 - **Geräte mit Fehlercode** im Geräte-Manager, mit Übersetzung der Codes (10, 22, 28, 43 …).
-- **USB-Ereignisse** und das selektive USB-Energiesparen als Ursache von Aussetzern.
+- **USB-Ereignisse**, das selektive USB-Energiesparen und das **Stromsparen einzelner Geräte** (das
+  Häkchen im Geräte-Manager) als Ursache von Aussetzern, dazu hängengebliebene „Unbekanntes
+  USB-Gerät“-Einträge, mehrere Kameras und Programme, die die Kamera gerade belegen.
 - **Prozessorlast** mit Benennung der Verursacher, Speicherbelegung und Autostart-Umfang.
+- **Systemhygiene**: Energiesparmodus als Handbremse, wie lange der letzte *echte* Start her ist
+  (bei aktivem Schnellstart ist „Herunterfahren“ keiner), mehrere gleichzeitig aktive Virenscanner.
 
 ### Reparaturen
 
@@ -155,6 +167,39 @@ weitere. Dabei gilt:
 - **Fast alles ist umkehrbar** – mit einem Klick auf *Zurücknehmen*.
 - Auf Wunsch wird vor der ersten Änderung ein **Systemwiederherstellungspunkt** angelegt.
 
+### Wartung
+
+Der Bereich *Wartung* ist für alles, was nicht nur gemeldet, sondern auf Knopfdruck erledigt werden
+soll. **Prüfen ist dort immer folgenlos** – geändert wird nur, was ausdrücklich angeklickt wird, und
+nach jeder Aktion liest die App den Zustand neu ein und meldet, was wirklich Sache ist (nicht, was
+das Werkzeug zurückgemeldet hat).
+
+- **Autostart** zeigt *alle* Startwege an einer Stelle: Registry, Autostart-Ordner, Aufgabenplanung
+  und fremde Dienste auf „Automatisch“ – auch die, die der Task-Manager verschweigt. Zu jedem Eintrag
+  steht in normalem Deutsch, was das Programm ist und ob es mitstarten muss; bei kryptischen Namen
+  liest die App Hersteller und Beschreibung aus der Programmdatei. Rauswerfen ist umkehrbar, das
+  Programm bleibt installiert. Bei Hardware- und Schutzsoftware (Lüftersteuerung, Treiber, Virenschutz,
+  Anti-Cheat) kommt vorher einmal eine Rückfrage. Was die App nicht kennt, lässt sich per Knopf im
+  Browser nachschlagen – die Suche wird nur auf Klick geöffnet.
+- **Platz schaffen** rechnet zusammen, was wo liegt, *bevor* etwas gelöscht wird: Update-Reste,
+  Zwischenablage-Ordner, Papierkorb, Absturzberichte. Gelöscht wird konservativ – Zwischenablage-Ordner
+  nur, was älter als sieben Tage ist, Verknüpfungen werden weder betreten noch angefasst, was in Benutzung
+  ist bleibt liegen. `Windows.old` löscht die App nie selbst, sie öffnet die Datenträgerbereinigung.
+  Downloads, Desktop, Browser- und Steam-Zwischenspeicher werden nur *gezeigt*. Die Windows-eigenen
+  Ordner sind nur sichtbar, wenn PC Helper als Administrator läuft; die Ansicht sagt das ausdrücklich.
+- **Geräte** ist der Ersatz für die abgeschafften Windows-Problembehandlungen. Fehlercodes werden in
+  normales Deutsch übersetzt, und **„Neu einstecken“** startet ein Gerät per Software neu – dasselbe
+  wie Kabel raus und wieder rein. Dazu: hängengebliebene USB-Anmeldungen wegräumen, USB-Stromsparen im
+  Energieplan und pro Gerät abschalten, Kameras einzeln.
+
+**„Ist Absicht“.** Nicht jede Auffälligkeit ist ein Fehler. Jeder gelbe oder rote Punkt in der Wartung
+hat einen Knopf *Ist Absicht*: Der Punkt gilt dann als in Ordnung, steht ganz unten und zählt nicht
+mehr als Problem. Der Knopf wird zu *Doch wieder melden* – rückgängig geht jederzeit. Gespeichert wird
+das in den Einstellungen, nur auf diesem Rechner.
+
+Wartungsaktionen, die Administratorrechte brauchen, laufen als kurzes PowerShell-Skript mit einer
+UAC-Abfrage je Aktion. Die Skripte liegen danach unter `%LOCALAPPDATA%\PCHelper\fixes\` zum Nachlesen.
+
 ### Datenschutz
 
 Alle Daten bleiben auf dem Rechner (`%LOCALAPPDATA%\PCHelper`, Berichte unter
@@ -166,6 +211,17 @@ das eigene Standardgateway und an `1.1.1.1` und löst einmal `www.msftconnecttes
 lässt sich nicht feststellen, ob die Verbindung am Router, am Anschluss oder an der Namensauflösung
 scheitert. Es werden dabei keinerlei Inhalte übertragen. Der Test läuft nur mit, wenn ein
 Netzwerk-Symptom gewählt wurde oder die vollständige Prüfung ausgeführt wird.
+
+Dieselbe Ausnahme gilt für die beiden Messungen zum Tempo:
+
+- Die **Ladezeit-Messung** ruft je viermal eine winzige Datei (wenige Kilobyte) von
+  `www.wikipedia.org`, `www.cloudflare.com` und `www.google.com` ab, jedes Mal mit frischer
+  Verbindung – gemessen wird nur die Zeit, es werden keine Inhalte ausgewertet.
+- Die **DNS-Messung** stellt je vier Namensanfragen an die eingetragenen Namensserver und eine
+  Vergleichsanfrage (`www.wikipedia.org`) an den Router sowie an `1.1.1.1`, `8.8.8.8` und `9.9.9.9`.
+
+Alle übrigen Wartungsfunktionen arbeiten rein lokal. Nur die Suche „Im Web nachsehen“ öffnet den
+Browser – und nur auf Klick.
 
 Ein erzeugter Bericht enthält allerdings Hardware- und Ereignisprotokolldaten inklusive Geräte- und
 teilweise Benutzernamen. Vor dem Weitergeben also kurz durchsehen.
@@ -335,7 +391,14 @@ Führt ohne Oberfläche aus:
    Verweisen),
 3. einen Aufbau des Hauptfensters samt aller Seiten ohne Anzeige – fehlende XAML-Ressourcen fallen
    sonst erst auf, wenn jemand die betreffende Seite öffnet,
-4. eine gezielte Untersuchung inklusive Freitext-Zuordnung als Beispiel.
+4. eine Prüfung aller drei Wartungsbereiche (ohne je eine Aktion auszuführen – der Selbsttest darf
+   nichts am System ändern) und eine Syntaxprüfung der PowerShell-Skripte, die die Wartung mit
+   Administratorrechten startet – so lassen sie sich ohne UAC-Abfrage testen,
+5. eine gezielte Untersuchung inklusive Freitext-Zuordnung als Beispiel.
+
+Ist die Umgebungsvariable `PCHELPER_SELFTEST_SHOTS` auf einen Ordner gesetzt, legt der Selbsttest
+zusätzlich von jedem Wartungsbereich ein Bild ab – praktisch, um Änderungen an der Oberfläche ohne
+Klicken zu prüfen.
 
 Alles wird nach `%LOCALAPPDATA%\PCHelper\pchelper.log` protokolliert; Exitcode 0 (bzw. 1 bei
 Fehler). Wird auch im CI-Workflow als Rauchtest verwendet. Der Selbsttest ist von der
@@ -360,6 +423,7 @@ src/PCHelper/
   Knowledge/      Wissensdatenbank bekannter Problemmuster
   Monitoring/     Dauerüberwachung, Messreihen, Vorfälle
   Fixes/          Katalog der Reparaturen und deren Ausführung
+  Maintenance/    Wartung: Autostart, Platz schaffen, Geräte – Punkte mit Knopf, prüfen ist folgenlos
   Reporting/      Berichte als PDF (eigener Generator), HTML und Markdown
   Update/         Update über GitHub Releases
   ViewModels/     Ansichtslogik

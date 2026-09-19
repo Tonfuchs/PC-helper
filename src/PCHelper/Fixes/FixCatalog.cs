@@ -438,6 +438,138 @@ public static class FixCatalog
             Commands = new[] { "powercfg /setactive SCHEME_MIN" },
             RevertCommands = new[] { "powercfg /setactive SCHEME_BALANCED" },
         },
+
+        new()
+        {
+            Id = "power-balanced",
+            Title = "Energieplan auf Ausbalanciert stellen",
+            Category = "Energie",
+            Description = "Aktiviert den Windows-Energieplan 'Ausbalanciert'.",
+            Why = "Im Energiesparmodus drosselt Windows den Prozessor absichtlich, um Strom zu sparen. Auf einem Rechner, der " +
+                  "spielen oder streamen soll, ist das eine unsichtbare Handbremse. 'Ausbalanciert' regelt die Leistung nach " +
+                  "Bedarf hoch und runter.",
+            Risk = FixRisk.Gering,
+            Commands = new[] { "powercfg /setactive SCHEME_BALANCED" },
+            RevertCommands = new[] { "powercfg /setactive SCHEME_MAX" },
+        },
+
+        // ---------------- Netzwerk: Umwege und Bremsen ----------------
+
+        new()
+        {
+            Id = "proxy-off",
+            Title = "Eingetragenen Proxy-Server entfernen",
+            Category = "Netzwerk",
+            Description = "Schaltet den Proxy in den Internetoptionen aus und entfernt den eingetragenen Server.",
+            Why = "Jede Internetanfrage laeuft dann zuerst zu diesem Server. Ist er nicht erreichbar, wartet Windows bei jeder " +
+                  "einzelnen Anfrage auf einen Timeout - das fuehlt sich an wie ein eingefrorener Rechner. Solche Eintraege " +
+                  "bleiben oft von alter Software zurueck. Im Privathaushalt braucht man praktisch nie einen Proxy.\n\n" +
+                  "Die Adresse des Servers geht dabei verloren. Wenn du sie noch brauchst, vorher notieren.",
+            Risk = FixRisk.Mittel,
+            RequiresAdmin = false,
+            Commands = new[]
+            {
+                @"reg add ""HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"" /v ProxyEnable /t REG_DWORD /d 0 /f",
+                @"reg delete ""HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"" /v ProxyServer /f",
+            },
+        },
+
+        new()
+        {
+            Id = "auto-proxy-off",
+            Title = "Automatische Proxy-Suche abschalten",
+            Category = "Netzwerk",
+            Description = "Setzt 'Einstellungen automatisch erkennen' in den Internetoptionen auf aus.",
+            Why = "Windows sucht bei jeder neuen Verbindung selbsttaetig nach einem Proxy-Server. Im Heimnetz gibt es keinen, " +
+                  "also wartet es jedes Mal vergeblich, bis die Suche aufgibt. Das verzoegert spuerbar den ersten Seitenaufruf.",
+            Risk = FixRisk.Gering,
+            RequiresAdmin = false,
+            Commands = new[]
+            {
+                @"reg add ""HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"" /v AutoDetect /t REG_DWORD /d 0 /f",
+            },
+            RevertCommands = new[]
+            {
+                @"reg add ""HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"" /v AutoDetect /t REG_DWORD /d 1 /f",
+            },
+        },
+
+        new()
+        {
+            Id = "tcp-autotuning-normal",
+            Title = "TCP-Empfangsfenster auf 'normal' zuruecksetzen",
+            Category = "Netzwerk",
+            Description = "Setzt die automatische Abstimmung des TCP-Empfangsfensters auf den Windows-Standard.",
+            Why = "Steht die Abstimmung auf 'disabled' oder 'restricted', darf Windows nur kleine Datenmengen am Stueck annehmen. " +
+                  "Auf schnellen Leitungen bricht der Durchsatz dadurch stark ein. Der Wert wird gern von aelteren " +
+                  "'Tuning-Programmen' verstellt.",
+            Risk = FixRisk.Gering,
+            Commands = new[] { "netsh int tcp set global autotuninglevel=normal" },
+        },
+
+        new()
+        {
+            Id = "wlan-off-with-cable",
+            Title = "WLAN abschalten, solange ein Netzwerkkabel steckt",
+            Category = "Netzwerk",
+            Description = "Schaltet die WLAN-Adapter ab - aber nur, wenn ein aktives Netzwerkkabel gefunden wird.",
+            Why = "Haengt der Rechner gleichzeitig per Kabel und per WLAN am selben Router, muss Windows sich staendig entscheiden, " +
+                  "und manche Programme erwischen die langsamere Leitung. Das Kabel ist immer schneller und stabiler.",
+            Risk = FixRisk.Gering,
+            Commands = new[]
+            {
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"" +
+                "$kabel = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -notmatch 'Wi-?Fi|Wireless|WLAN' }; " +
+                "if (-not $kabel) { Write-Error 'Kein aktives Netzwerkkabel gefunden - das WLAN bleibt an.'; exit 1 }; " +
+                "Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -match 'Wi-?Fi|Wireless|WLAN' } | " +
+                "Disable-NetAdapter -Confirm:$false\"",
+            },
+            RevertCommands = new[]
+            {
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"" +
+                "Get-NetAdapter -Physical | Where-Object { $_.InterfaceDescription -match 'Wi-?Fi|Wireless|WLAN' } | " +
+                "Enable-NetAdapter -Confirm:$false\"",
+            },
+        },
+
+        new()
+        {
+            Id = "ghost-adapters-remove",
+            Title = "Netzwerkkarten-Karteileichen entfernen",
+            Category = "Netzwerk",
+            Description = "Entfernt Netzwerkkarten, die in Windows eingetragen sind, aber nicht mehr im Rechner stecken.",
+            Why = "Reste von alten Treibern, VPN-Programmen oder USB-Adaptern. Sie bremsen nichts direkt, machen aber die " +
+                  "Netzwerkeinstellungen unuebersichtlich und koennen die Reihenfolge durcheinanderbringen. Steckt das Geraet " +
+                  "wieder, richtet Windows es von selbst neu ein.",
+            Risk = FixRisk.Gering,
+            Commands = new[]
+            {
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"" +
+                "Get-NetAdapter | Where-Object { $_.Status -eq 'Not Present' } | Remove-NetAdapter -Confirm:$false\"",
+            },
+        },
+
+        // ---------------- Geraete ----------------
+
+        new()
+        {
+            Id = "device-power-saving-off",
+            Title = "Stromsparen einzelner USB-Geraete und Netzwerkkarten abschalten",
+            Category = "Geraete",
+            Description = "Entfernt im Geraete-Manager das Haekchen 'Computer kann das Geraet ausschalten, um Energie zu sparen' " +
+                          "bei USB-Verteilern, USB-Geraeten und Netzwerkkarten.",
+            Why = "Das ist eine zweite Stromspar-Ebene, unabhaengig vom Energieplan - deshalb bringt es oft nichts, nur den " +
+                  "Energieplan umzustellen. Genau das verhindert, dass Webcams, Mikrofone und externe Platten mitten im Betrieb " +
+                  "verschwinden. Der eingesparte Strom liegt im Bereich einer Gluehbirne, die kurz blinkt.",
+            Risk = FixRisk.Gering,
+            Commands = new[]
+            {
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"" +
+                "Get-CimInstance -Namespace root\\wmi -ClassName MSPower_DeviceEnable -ErrorAction SilentlyContinue | " +
+                "Where-Object { $_.Enable -and $_.InstanceName -match '^(USB\\\\ROOT_HUB|USB\\\\VID_|PCI\\\\VEN_.*NET)' } | " +
+                "ForEach-Object { $_.Enable = $false; Set-CimInstance -InputObject $_ }\"",
+            },
+        },
     };
 
     public static Fix? ById(string id) => All.FirstOrDefault(f => f.Id == id);

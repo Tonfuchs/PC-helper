@@ -310,7 +310,7 @@ public static class SymptomCatalog
                 "Bei WLAN: Abstand zum Router und Kanalwahl pruefen, testweise 5 GHz statt 2,4 GHz oder umgekehrt.",
                 "Testweise per Kabel verbinden - das trennt Funkprobleme von allem anderen.",
             },
-            FixIds = new[] { "network-power-off", "network-reset-stack" },
+            FixIds = new[] { "network-power-off", "network-reset-stack", "device-power-saving-off" },
             ToolIds = new[] { "device-manager", "network-settings", "event-viewer" },
         },
         new()
@@ -335,8 +335,10 @@ public static class SymptomCatalog
                 "Im Task-Manager unter 'Leistung' pruefen, mit welcher Verbindungsgeschwindigkeit der Adapter laeuft (100 Mbit deutet auf ein defektes Kabel oder eine schlechte Steckverbindung hin).",
                 "Windows-Update und Spiele-Launcher pruefen - Hintergrunddownloads fressen die Leitung leise auf.",
                 "Bei WLAN einmal per Kabel gegentesten.",
+                "Laeuft ein VPN, es einmal ausschalten und die Diagnose wiederholen: Der Umweg ueber den VPN-Server ist die haeufigste " +
+                "Ursache dafuer, dass Seiten mit vielen kleinen Bildern quaelend langsam laden.",
             },
-            FixIds = new[] { "flush-dns", "network-power-off" },
+            FixIds = new[] { "flush-dns", "network-power-off", "proxy-off", "tcp-autotuning-normal", "wlan-off-with-cable" },
             ToolIds = new[] { "taskmgr", "network-settings", "resource-monitor" },
         },
 
@@ -362,10 +364,10 @@ public static class SymptomCatalog
             FirstSteps = new[]
             {
                 "Task-Manager oeffnen und nach Spalte 'CPU', dann nach 'Datentraeger' sortieren - der Bremser steht meist ganz oben.",
-                "Autostart ausmisten: Task-Manager > Autostart, alles ausschalten, was nicht wirklich beim Start laufen muss.",
-                "Freien Speicherplatz auf C: pruefen - unter 10 % wird Windows spuerbar langsamer.",
+                "Autostart ausmisten: unter 'Wartung' > 'Autostart' zeigt PC Helper alle Startwege samt Erklaerung - auch Aufgabenplanung und Dienste, die der Task-Manager verschweigt.",
+                "Freien Speicherplatz auf C: pruefen - unter 10 % wird Windows spuerbar langsamer. Unter 'Wartung' > 'Platz schaffen' steht, was wo liegt.",
             },
-            FixIds = new[] { "power-high-performance", "sfc-dism" },
+            FixIds = new[] { "power-high-performance", "power-balanced", "sfc-dism" },
             ToolIds = new[] { "taskmgr", "resource-monitor", "cleanmgr", "power-options" },
         },
         new()
@@ -552,8 +554,9 @@ public static class SymptomCatalog
                 "Direkt an einen Anschluss hinten am Mainboard stecken, nicht ueber Hub oder Frontpanel.",
                 "Anderes Kabel testen - bei externen Platten ist das Kabel die haeufigste Ursache.",
                 "Geraet an einem anderen Rechner gegentesten, um Geraet und PC zu trennen.",
+                "'Wartung' > 'Geraete' raeumt haengengebliebene 'Unbekanntes USB-Geraet'-Eintraege weg und startet ein Geraet per Software neu - wie Kabel raus und wieder rein.",
             },
-            FixIds = new[] { "usb-suspend-off" },
+            FixIds = new[] { "usb-suspend-off", "device-power-saving-off" },
             ToolIds = new[] { "device-manager", "event-viewer", "power-options" },
         },
         new()
@@ -604,8 +607,9 @@ public static class SymptomCatalog
                 "Windows-Einstellungen > Datenschutz > Kamera: Zugriff und 'Desktop-Apps' pruefen.",
                 "Alle anderen Programme schliessen, die die Kamera nutzen koennten.",
                 "Mit der Windows-App 'Kamera' gegentesten - funktioniert sie dort, liegt es an der anderen Anwendung.",
+                "'Wartung' > 'Geraete' > 'Neu einstecken' startet die Kamera per Software neu, ohne dass ein Kabel angefasst werden muss.",
             },
-            FixIds = new[] { "camera-privacy-allow", "usb-suspend-off" },
+            FixIds = new[] { "camera-privacy-allow", "usb-suspend-off", "device-power-saving-off" },
             ToolIds = new[] { "camera-privacy", "device-manager" },
         },
         new()
@@ -631,7 +635,7 @@ public static class SymptomCatalog
                 "Nicht alles an einen Hub haengen; USB 3.0 stoert 2,4-GHz-Funk besonders stark.",
                 "Batterien bzw. Akkustand pruefen.",
             },
-            FixIds = new[] { "usb-suspend-off" },
+            FixIds = new[] { "usb-suspend-off", "device-power-saving-off" },
             ToolIds = new[] { "device-manager", "power-options" },
         },
 
@@ -733,7 +737,7 @@ public static class SymptomCatalog
             },
             FirstSteps = new[]
             {
-                "Task-Manager > Autostart: alles mit hoher Startauswirkung deaktivieren.",
+                "Autostart ausmisten: 'Wartung' > 'Autostart' zeigt alle Startwege in normalem Deutsch, auch die, die der Task-Manager nicht kennt.",
                 "Pruefen, ob Windows auf einer SSD oder noch auf einer klassischen Festplatte liegt.",
                 "Ereignisprotokoll auf Dienste ansehen, die beim Start in einen Zeitablauf laufen.",
             },

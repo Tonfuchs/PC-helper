@@ -342,7 +342,8 @@ public sealed class LiveSensorCheck : ICheck
                     Summary = NvidiaSmi.IsAvailable
                         ? "nvidia-smi lieferte keine Werte."
                         : "nvidia-smi wurde nicht gefunden (nur bei NVIDIA-Grafikkarten verfuegbar).",
-                    Detail = "Temperaturen lassen sich alternativ mit HWiNFO64 auslesen. " +
+                    Detail = (NvidiaSmi.LastError is { Length: > 0 } err ? $"Meldung von nvidia-smi: {err}\n\n" : "") +
+                             "Temperaturen lassen sich alternativ mit HWiNFO64 auslesen. " +
                              "Die Dauerueberwachung dieser App zeichnet die Werte automatisch mit, sobald sie verfuegbar sind.",
                 }
             };

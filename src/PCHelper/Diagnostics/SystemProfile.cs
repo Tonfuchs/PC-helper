@@ -176,7 +176,7 @@ public sealed class ProblemDevice
         39 => "Der Treiber ist beschaedigt oder fehlt.",
         43 => "Windows hat das Geraet gestoppt, weil es Fehler gemeldet hat.",
         45 => "Das Geraet ist derzeit nicht angeschlossen (Eintrag stammt aus einer frueheren Verbindung).",
-        _ => "Windows meldet Fehlercode " + ErrorCode + ".",
+        _ => Maintenance.DeviceErrorCodes.Describe(ErrorCode)?.Meaning ?? "Windows meldet Fehlercode " + ErrorCode + ".",
     };
 }
 

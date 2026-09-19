@@ -28,6 +28,7 @@ public sealed class MainViewModel : ObservableObject
         Diagnose = new DiagnoseViewModel(knowledge, incidents, monitor);
         Monitoring = new MonitorViewModel(monitor, incidents, settings);
         Fixes = new FixesViewModel();
+        Maintenance = new MaintenanceViewModel(settings);
         Tools = new ToolsViewModel();
         Symptoms = new SymptomViewModel(Diagnose, Tools, page => CurrentPage = page);
 
@@ -48,6 +49,7 @@ public sealed class MainViewModel : ObservableObject
     public DiagnoseViewModel Diagnose { get; }
     public MonitorViewModel Monitoring { get; }
     public FixesViewModel Fixes { get; }
+    public MaintenanceViewModel Maintenance { get; }
     public ToolsViewModel Tools { get; }
     public SymptomViewModel Symptoms { get; }
 
@@ -73,10 +75,13 @@ public sealed class MainViewModel : ObservableObject
             Raise(nameof(IsDiagnose));
             Raise(nameof(IsMonitor));
             Raise(nameof(IsFixes));
+            Raise(nameof(IsMaintenance));
             Raise(nameof(IsTools));
             Raise(nameof(IsSettings));
             Raise(nameof(PageTitle));
             Raise(nameof(PageSubtitle));
+
+            if (value == "maintenance") Maintenance.OnPageShown();
         }
     }
 
@@ -85,6 +90,7 @@ public sealed class MainViewModel : ObservableObject
     public bool IsDiagnose => CurrentPage == "diagnose";
     public bool IsMonitor => CurrentPage == "monitor";
     public bool IsFixes => CurrentPage == "fixes";
+    public bool IsMaintenance => CurrentPage == "maintenance";
     public bool IsTools => CurrentPage == "tools";
     public bool IsSettings => CurrentPage == "settings";
 
@@ -94,6 +100,7 @@ public sealed class MainViewModel : ObservableObject
         "diagnose" => "Diagnose",
         "monitor" => "Dauerueberwachung",
         "fixes" => "Reparaturen",
+        "maintenance" => "Wartung",
         "tools" => "Werkzeuge",
         "settings" => "Einstellungen",
         _ => "Uebersicht",
@@ -105,6 +112,7 @@ public sealed class MainViewModel : ObservableObject
         "diagnose" => "Pruefung von Hardware, Treibern, Ton, Netzwerk, Geraeten und Ereignisprotokoll",
         "monitor" => "Zeichnet fortlaufend auf, was kurz vor einem Ausfall passiert",
         "fixes" => "Nachvollziehbare Systemaenderungen, jederzeit umkehrbar",
+        "maintenance" => "Autostart, Speicherplatz und Geraete - erst ansehen, dann entscheiden",
         "tools" => "Bordmittel von Windows und bewaehrte Zusatzprogramme",
         "settings" => "Updates, Autostart und Aufzeichnung",
         _ => "Status auf einen Blick",

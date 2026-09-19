@@ -138,7 +138,10 @@ public partial class App : Application
             Log.Info("Selbsttest: PDF-Bericht geschrieben nach " + pdfPath);
 
             if (!CheckSymptomCatalog()) exitCode = 1;
-            if (!CheckUserInterface(incidents)) exitCode = 1;
+            if (!await CheckUserInterfaceAsync(incidents)) exitCode = 1;
+            if (!await CheckMaintenanceAsync()) exitCode = 1;
+            if (!await CheckMaintenanceScriptsAsync()) exitCode = 1;
+            if (!await CheckGpuSensorsAsync()) exitCode = 1;
             await CheckFocusedRunAsync(knowledge);
         }
         catch (Exception ex)
@@ -150,6 +153,34 @@ public partial class App : Application
         {
             Shutdown(exitCode);
         }
+    }
+
+    /// <summary>
+    /// Ist nvidia-smi vorhanden, muss es Werte liefern. Ein Feldname, den ein neuer Treiber nicht mehr
+    /// kennt, laesst sonst die ganze Abfrage scheitern - dann fehlen Live-Werte und gpu-blackbox.csv,
+    /// ohne dass irgendetwas auffaellt (so geschehen mit Treiber 616.92).
+    /// </summary>
+    private static async Task<bool> CheckGpuSensorsAsync()
+    {
+        if (!Diagnostics.NvidiaSmi.IsAvailable)
+        {
+            Log.Info("Selbsttest: GPU-Sensorik uebersprungen (kein nvidia-smi).");
+            return true;
+        }
+
+        var samples = await Diagnostics.NvidiaSmi.SampleAsync();
+        if (samples.Count == 0)
+        {
+            Log.Error("Selbsttest: nvidia-smi ist vorhanden, lieferte aber keine Werte: " + Diagnostics.NvidiaSmi.LastError);
+            return false;
+        }
+
+        var g = samples[0];
+        Log.Info($"Selbsttest: GPU-Sensorik - {g.Name}, Treiber {g.DriverVersion}, {g.TemperatureC:0} C, " +
+                 $"{g.PowerWatt:0} W von {g.PowerLimitWatt:0} W, PCIe Gen {g.PcieLinkGenCurrent}/{g.PcieLinkGenMax} " +
+                 $"x{g.PcieLinkWidthCurrent}/{g.PcieLinkWidthMax}, Drosselung Leistung={g.ThrottlePowerCap} " +
+                 $"Temperatur={g.ThrottleThermal} Hardware={g.ThrottleHwSlowdown}");
+        return true;
     }
 
     /// <summary>
@@ -189,7 +220,7 @@ public partial class App : Application
     /// Fehlende Ressourcenverweise in XAML fallen sonst erst auf, wenn jemand
     /// die betreffende Seite oeffnet - und dann mit einem Absturz.
     /// </summary>
-    private bool CheckUserInterface(IncidentStore incidents)
+    private async Task<bool> CheckUserInterfaceAsync(IncidentStore incidents)
     {
         try
         {
@@ -198,6 +229,27 @@ public partial class App : Application
 
             var window = new MainWindow { DataContext = vm };
             window.Measure(new System.Windows.Size(1180, 780));
+
+            // Die Wartungsseite baut ihre Karten erst auf, wenn Punkte da sind - ein Fehler in der Vorlage
+            // (etwa ein fehlender Ressourcenverweis) faellt sonst erst beim ersten Oeffnen auf.
+            // Mit PCHELPER_SELFTEST_SHOTS=<Ordner> werden die Seiten zusaetzlich als Bild abgelegt.
+            var shots = Environment.GetEnvironmentVariable("PCHELPER_SELFTEST_SHOTS");
+            vm.CurrentPage = "maintenance";
+            foreach (var section in vm.Maintenance.Sections)
+            {
+                await vm.Maintenance.SelectAsync(section);
+                for (int i = 0; i < 300 && (section.IsBusy || !section.HasScanned); i++) await Task.Delay(100);
+
+                // Das Fenster wird nie angezeigt: Inhalt ausdruecklich vermessen und anordnen.
+                var root = (FrameworkElement)window.Content;
+                root.Measure(new System.Windows.Size(1180, 780));
+                root.Arrange(new Rect(0, 0, 1180, 780));
+                root.UpdateLayout();
+
+                Log.Info($"Selbsttest: Wartungsseite '{section.Title}' baut {section.Items.Count} Karten auf.");
+                if (!string.IsNullOrEmpty(shots)) SaveScreenshot(root, System.IO.Path.Combine(shots, $"wartung-{section.Id}.png"));
+            }
+
             window.Close();
 
             Log.Info($"Selbsttest: Oberflaeche laedt fehlerfrei ({vm.Tools.Tools.Count} Werkzeuge, " +
@@ -209,6 +261,94 @@ public partial class App : Application
             Log.Error("Selbsttest: Oberflaeche konnte nicht aufgebaut werden", ex);
             return false;
         }
+    }
+
+    private static void SaveScreenshot(FrameworkElement element, string path)
+    {
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)element.ActualWidth, (int)element.ActualHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(element);
+
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = System.IO.File.Create(path);
+        encoder.Save(stream);
+    }
+
+    /// <summary>
+    /// Laesst die drei Wartungsbereiche einmal pruefen. Aktionen werden dabei nie ausgefuehrt -
+    /// der Selbsttest darf nichts am System veraendern.
+    /// </summary>
+    private async Task<bool> CheckMaintenanceAsync()
+    {
+        var scans = new (string Name, Func<Task<IReadOnlyList<Maintenance.MaintItem>>> Scan)[]
+        {
+            ("Autostart", () => Maintenance.StartupScanner.ScanAsync(_settings)),
+            ("Platz schaffen", () => Maintenance.CleanupScanner.ScanAsync()),
+            ("Geraete", () => Maintenance.DeviceItems.ScanAsync()),
+        };
+
+        bool ok = true;
+        foreach (var (name, scan) in scans)
+        {
+            try
+            {
+                var started = DateTime.Now;
+                var items = await scan();
+                Log.Info($"Selbsttest: Wartung '{name}' - {items.Count} Punkte in {(DateTime.Now - started).TotalSeconds:0.#} s.");
+
+                foreach (var item in items)
+                    Log.Info($"Selbsttest:   [{item.Severity}] {item.Group} / {item.Title} = {item.Value}" +
+                             (item.HasAction ? $" -> {item.ActionText}" : ""));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Selbsttest: Wartung '{name}' fehlgeschlagen", ex);
+                ok = false;
+            }
+        }
+        return ok;
+    }
+
+    /// <summary>
+    /// Die Wartungsaktionen laufen als PowerShell-Skript mit Administratorrechten und lassen sich im Selbsttest nicht
+    /// ausfuehren (UAC). Deshalb wird hier jedes Skript syntaktisch geprueft und der Skriptweg einmal ohne Elevation
+    /// mit einem harmlosen Skript durchlaufen.
+    /// </summary>
+    private static async Task<bool> CheckMaintenanceScriptsAsync()
+    {
+        var scripts = new (string Name, string Script)[]
+        {
+            ("Autostart (alle Benutzer)", Maintenance.StartupScanner.ApprovedScript("Run", "Beispiel", enable: false)),
+            ("Aufgabe abschalten", Maintenance.StartupScanner.TaskScript("Beispiel's Aufgabe", @"\", enable: false)),
+            ("Aufgabe einschalten", Maintenance.StartupScanner.TaskScript("Beispiel", @"\Ordner\", enable: true)),
+            ("Dienst auf Manuell", Maintenance.StartupScanner.ServiceScript("Beispiel", automatic: false)),
+            ("Dienst auf Automatisch", Maintenance.StartupScanner.ServiceScript("Beispiel", automatic: true)),
+            ("Geraet neu einstecken", Maintenance.DeviceItems.RestartScript(@"USB\VID_0000&PID_0002\5&2A1B3C4D&0&1")),
+            ("USB-Eintrag entfernen", Maintenance.DeviceItems.RemoveScript(@"USB\VID_0000&PID_0002\5&2A1B3C4D&0&1")),
+            ("Stromsparen einzelner Geraete", Maintenance.DeviceItems.PowerSavingScript),
+        };
+
+        bool ok = true;
+        foreach (var (name, script) in scripts)
+        {
+            var errors = await PowerShellRunner.CheckSyntaxAsync(script);
+            if (errors is null) continue;
+            Log.Error($"Selbsttest: Wartungsskript '{name}' hat Syntaxfehler: {errors}");
+            ok = false;
+        }
+
+        var (success, message) = await PowerShellRunner.RunScriptAsync(
+            "Write-Output 'PCH-RESULT:OK|Skriptweg in Ordnung'", "selbsttest", elevated: false);
+        if (!success || message != "Skriptweg in Ordnung")
+        {
+            Log.Error($"Selbsttest: Skriptweg liefert nicht das erwartete Ergebnis (Erfolg={success}, Text='{message}').");
+            ok = false;
+        }
+
+        Log.Info($"Selbsttest: {scripts.Length} Wartungsskripte geprueft - " + (ok ? "Syntax in Ordnung, Skriptweg funktioniert." : "FEHLER, siehe oben."));
+        return ok;
     }
 
     /// <summary>Fuehrt beispielhaft eine gezielte Untersuchung aus - so wie es die Oberflaeche tut.</summary>

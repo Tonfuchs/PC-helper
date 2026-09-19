@@ -67,6 +67,9 @@
                     <RadioButton Style="{StaticResource NavButton}" Tag="&#xE90F;" Content="Reparaturen"
                                  GroupName="nav" IsChecked="{Binding IsFixes, Mode=OneWay}"
                                  Command="{Binding NavigateCommand}" CommandParameter="fixes" />
+                    <RadioButton Style="{StaticResource NavButton}" Tag="&#xE8FD;" Content="Wartung"
+                                 GroupName="nav" IsChecked="{Binding IsMaintenance, Mode=OneWay}"
+                                 Command="{Binding NavigateCommand}" CommandParameter="maintenance" />
                     <RadioButton Style="{StaticResource NavButton}" Tag="&#xE912;" Content="Werkzeuge"
                                  GroupName="nav" IsChecked="{Binding IsTools, Mode=OneWay}"
                                  Command="{Binding NavigateCommand}" CommandParameter="tools" />
@@ -125,6 +128,7 @@
                 <v:DiagnoseView  Visibility="{Binding IsDiagnose,  Converter={StaticResource BoolVis}}" />
                 <v:MonitorView   Visibility="{Binding IsMonitor,   Converter={StaticResource BoolVis}}" />
                 <v:FixesView     Visibility="{Binding IsFixes,     Converter={StaticResource BoolVis}}" />
+                <v:MaintenanceView Visibility="{Binding IsMaintenance, Converter={StaticResource BoolVis}}" />
                 <v:ToolsView     Visibility="{Binding IsTools,     Converter={StaticResource BoolVis}}" />
                 <v:SettingsView  Visibility="{Binding IsSettings,  Converter={StaticResource BoolVis}}" />
             </Grid>
